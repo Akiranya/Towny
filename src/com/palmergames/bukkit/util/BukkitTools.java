@@ -3,6 +3,9 @@ package com.palmergames.bukkit.util;
 import com.google.common.base.Charsets;
 import com.palmergames.bukkit.towny.Towny;
 import com.palmergames.bukkit.towny.TownySettings;
+import com.palmergames.bukkit.towny.event.CancellableTownyEvent;
+import com.palmergames.bukkit.towny.exceptions.CancelledEventException;
+
 import net.citizensnpcs.api.CitizensAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -12,8 +15,15 @@ import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Cancellable;
+import org.bukkit.event.Event;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.scheduler.BukkitScheduler;
+import org.bukkit.scoreboard.Criteria;
+import org.bukkit.scoreboard.Objective;
+import org.bukkit.scoreboard.Scoreboard;
+import org.jetbrains.annotations.NotNull;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -112,7 +122,7 @@ public class BukkitTools {
 	 * @return a true value if online
 	 */
 	public static boolean isOnline(String name) {
-		return Bukkit.getPlayer(name) != null;
+		return Bukkit.getPlayerExact(name) != null;
 	}
 	
 	public static List<World> getWorlds() {
@@ -267,5 +277,44 @@ public class BukkitTools {
 			
 		}
 		return false;
+	}
+	
+	@SuppressWarnings("deprecation")
+	public static Objective objective(Scoreboard board, @NotNull String name, @NotNull String displayName) {
+		Objective objective;
+		try {
+			objective = board.registerNewObjective(name, Criteria.DUMMY, displayName);
+		} catch (NoClassDefFoundError e) {
+			// TODO: Remove when 1.19.2 is the lowest supported version.
+			objective = board.registerNewObjective(name, "dummy", displayName);
+		}
+		return objective;
+	}
+
+	/**
+	 * @param event The event to call
+	 * @return {@code true} if the event is cancellable and was cancelled, otherwise {@code false}.
+	 */
+	public static boolean isEventCancelled(@NotNull Event event) {
+		fireEvent(event);
+		
+		if (event instanceof Cancellable cancellable)
+			return cancellable.isCancelled();
+		else
+			return false;
+	}
+
+	/**
+	 * @param event CancellableTownyEvent to be fired which might be cancelled.
+	 * @throws CancelledEventException with the Event's cancelMessage.
+	 */
+	public static void ifCancelledThenThrow(@NotNull CancellableTownyEvent event) throws CancelledEventException {
+		fireEvent(event);
+		if (event.isCancelled())
+			throw new CancelledEventException(event);
+	}
+
+	public static void fireEvent(@NotNull Event event) {
+		Bukkit.getPluginManager().callEvent(event);
 	}
 }

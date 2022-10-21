@@ -156,10 +156,9 @@ public class CombatUtil {
 				 * A player has attempted to damage a player. Throw a TownPlayerDamagePlayerEvent.
 				 */
 				TownyPlayerDamagePlayerEvent event = new TownyPlayerDamagePlayerEvent(defendingPlayer.getLocation(), defendingPlayer, cause, defenderTB, cancelled, attackingPlayer);
-				BukkitTools.getPluginManager().callEvent(event);
 
 				// A cancelled event should contain a message.
-				if (event.isCancelled() && event.getMessage() != null)
+				if (BukkitTools.isEventCancelled(event) && event.getMessage() != null)
 					TownyMessaging.sendErrorMsg(attackingPlayer, event.getMessage());
 				
 				return event.isCancelled();
@@ -175,13 +174,16 @@ public class CombatUtil {
 				if (defenderTB != null) {
 					
 					/*
-					 * Protect tamed dogs in town land which are not owned by the attacking player.
+					 * Protect tamed dogs in town land which are not owned by the attacking player,
+					 * unless they are angry and attacking the player.
 					 */
 					if (defendingEntity instanceof Wolf wolf) {
-						if (!isOwner(wolf, attackingPlayer)) {
+						if (!isOwner(wolf, attackingPlayer) && !isTargetingPlayer(wolf, attackingPlayer)) {
 							if (EntityTypeUtil.isProtectedEntity(defendingEntity))
 								return !(defenderTB.getPermissions().pvp || TownyActionEventExecutor.canDestroy(attackingPlayer, wolf.getLocation(), Material.STONE));
 						} else
+							// The player doesn't own the wolf, and the wolf is actively angry and targeting the player.
+							// Allow the combat.
 							return false;
 					}
 					
@@ -194,7 +196,7 @@ public class CombatUtil {
 					/*
 					 * Config's protected entities: Animals,WaterMob,NPC,Snowman,ArmorStand,Villager
 					 */
-					if (EntityTypeUtil.isProtectedEntity(defendingEntity)) 						
+					if (EntityTypeUtil.isProtectedEntity(defendingEntity))
 						return !TownyActionEventExecutor.canDestroy(attackingPlayer, defendingEntity.getLocation(), Material.DIRT);
 				}
 				
@@ -246,9 +248,9 @@ public class CombatUtil {
 				 * 
 				 * Prevent pvp and remove Wolf targeting.
 				 */
-				if (attackingEntity instanceof Wolf && (preventPvP(world, attackerTB) || preventPvP(world, defenderTB))) {
-					((Wolf) attackingEntity).setTarget(null);
-					((Wolf) attackingEntity).setAngry(false);
+				if (attackingEntity instanceof Wolf wolf && (preventPvP(world, attackerTB) || preventPvP(world, defenderTB))) {
+					wolf.setTarget(null);
+					wolf.setAngry(false);
 					return true;
 				}
 				
@@ -330,7 +332,7 @@ public class CombatUtil {
 			 * Check the attackers TownBlock and it's Town for their PvP status.
 			 */
 			TownBlockPVPTestEvent event = new TownBlockPVPTestEvent(townBlock, isPvP(townBlock));
-			Bukkit.getPluginManager().callEvent(event);
+			BukkitTools.fireEvent(event);
 			return !event.isPvp();
 
 		} else {
@@ -339,7 +341,7 @@ public class CombatUtil {
 			 * Attacker isn't in a TownBlock so check the wilderness PvP status.
 			 */
 			WildernessPVPTestEvent event = new WildernessPVPTestEvent(world, isWorldPvP(world));
-			Bukkit.getPluginManager().callEvent(event);
+			BukkitTools.fireEvent(event);
 			return !event.isPvp();
 		}
 	}
@@ -391,7 +393,7 @@ public class CombatUtil {
 					return false;
 
 				TownyFriendlyFireTestEvent event = new TownyFriendlyFireTestEvent(attacker, defender, world);
-				Bukkit.getPluginManager().callEvent(event);
+				BukkitTools.fireEvent(event);
 	
 				if (!event.isPVP() && !event.getCancelledMessage().isEmpty())
 					TownyMessaging.sendErrorMsg(attacker, event.getCancelledMessage());
@@ -665,7 +667,11 @@ public class CombatUtil {
 	private static boolean isOwner(Wolf wolf, Player attackingPlayer) {
 		return wolf.getOwner() instanceof HumanEntity owner && owner.getUniqueId().equals(attackingPlayer.getUniqueId());
 	}
-	
+
+	private static boolean isTargetingPlayer(Wolf wolf, Player attackingPlayer) {
+		return wolf.isAngry() && wolf.getTarget() != null && wolf.getTarget().equals(attackingPlayer);
+	}
+
 	private static boolean isATamedWolfWithAOnlinePlayer(Wolf wolf) {
 		return wolf.getOwner() instanceof HumanEntity owner && Bukkit.getPlayer(owner.getUniqueId()) != null;
 	}
@@ -683,9 +689,6 @@ public class CombatUtil {
 		if (!isArenaPlot(dispenserTB, defenderTB))
 			preventDamage = preventPvP(world, dispenserTB) || preventPvP(world, defenderTB);
 
-		TownyDispenserDamageEntityEvent event = new TownyDispenserDamageEntityEvent(entity.getLocation(), entity, cause, defenderTB, preventDamage, dispenser);
-		Bukkit.getPluginManager().callEvent(event);
-		
-		return event.isCancelled();
+		return BukkitTools.isEventCancelled(new TownyDispenserDamageEntityEvent(entity.getLocation(), entity, cause, defenderTB, preventDamage, dispenser));
 	}
 }

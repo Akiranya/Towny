@@ -20,6 +20,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.Boat;
 import org.bukkit.entity.Creature;
 import org.bukkit.entity.DragonFireball;
 import org.bukkit.entity.Entity;
@@ -390,10 +391,8 @@ public class TownyEntityListener implements Listener {
 			if (TownySettings.isSkippingRemovalOfNamedMobs() && livingEntity.getCustomName() != null)
 				return;
 
-			MobSpawnRemovalEvent mobSpawnRemovalEvent;
-			mobSpawnRemovalEvent = new MobSpawnRemovalEvent(event.getEntity());
-			plugin.getServer().getPluginManager().callEvent(mobSpawnRemovalEvent);
-			if(mobSpawnRemovalEvent.isCancelled()) return;
+			if(BukkitTools.isEventCancelled(new MobSpawnRemovalEvent(event.getEntity())))
+				return;
 
 			Location loc = event.getLocation();
 			TownyWorld townyWorld = TownyAPI.getInstance().getTownyWorld(loc.getWorld().getName());
@@ -478,6 +477,7 @@ public class TownyEntityListener implements Listener {
 
 	}
 
+	@SuppressWarnings("deprecation")
 	/**
 	 * Handles:
 	 *  Enderman thieving protected blocks.
@@ -513,28 +513,39 @@ public class TownyEntityListener implements Listener {
 			}
 		}
 
-		switch (event.getEntity().getType()) {
+		// Switch over name instead of EntityType to maintain pre-1.19 compatibility. (For chest_boats.)
+		switch (event.getEntity().getType().name()) {
 	
-			case ENDERMAN:
-	
+			case "ENDERMAN":
 				if (townyWorld.isEndermanProtect())
 					event.setCancelled(true);
 				break;
-				
-			case RAVAGER:
-				
+
+			/* Protect lily pads. */
+			case "BOAT", "CHEST_BOAT":
+				if (!event.getBlock().getType().equals(Material.LILY_PAD))
+					return;
+				Boat boat = (Boat) event.getEntity();
+				if (boat.getPassenger() != null && boat.getPassenger() instanceof Player player)
+					// Test if the player can break here.
+					event.setCancelled(!TownyActionEventExecutor.canDestroy(player, event.getBlock()));
+				else if (!TownyAPI.getInstance().isWilderness(event.getBlock()))
+					// Protect townland from non-player-ridden boats. (Maybe someone is pushing a boat?)
+					event.setCancelled(true);
+				break;
+
+			case "RAVAGER":
 				if (townyWorld.isDisableCreatureTrample())
 					event.setCancelled(true);
 				break;
-		
-			case WITHER:
+
+			case "WITHER":
 				List<Block> allowed = TownyActionEventExecutor.filterExplodableBlocks(Collections.singletonList(event.getBlock()), event.getBlock().getType(), event.getEntity(), event);
 				event.setCancelled(allowed.isEmpty());
 				break;
-			/*
-			 * Protect campfires from SplashWaterBottles. Uses a destroy test.
-			 */
-			case SPLASH_POTION:			
+
+			/* Protect campfires from SplashWaterBottles. Uses a destroy test. */
+			case "SPLASH_POTION":
 				if (event.getBlock().getType() != Material.CAMPFIRE && ((ThrownPotion) event.getEntity()).getShooter() instanceof Player)
 					return;
 				event.setCancelled(!TownyActionEventExecutor.canDestroy((Player) ((ThrownPotion) event.getEntity()).getShooter(), event.getBlock().getLocation(), Material.CAMPFIRE));
@@ -656,7 +667,7 @@ public class TownyEntityListener implements Listener {
 		if (!TownyAPI.getInstance().isTownyWorld(event.getEntity().getWorld()))
 			return;
 		
-		Entity hanging = event.getEntity();		
+		Entity hanging = event.getEntity();
 		TownyWorld townyWorld = TownyAPI.getInstance().getTownyWorld(hanging.getWorld().getName());
 
 		// Prevent an item_frame or painting from breaking if it is attached to something which will be regenerated.

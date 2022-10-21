@@ -28,6 +28,7 @@ import com.palmergames.bukkit.towny.object.Town;
 import com.palmergames.bukkit.towny.object.TownBlock;
 import com.palmergames.bukkit.towny.object.TownBlockType;
 import com.palmergames.bukkit.towny.object.TownyWorld;
+import com.palmergames.bukkit.util.BukkitTools;
 import com.palmergames.bukkit.util.ChatTools;
 import com.palmergames.bukkit.util.Colors;
 import com.palmergames.bukkit.util.Compass;
@@ -158,7 +159,7 @@ public class TownyAsciiMap {
 							? townblock.getPlotObjectGroup().getPrice()
 							: townblock.getPlotPrice();
 						if (cost > -1)
-							forSaleComponent = TownyComponents.legacy(String.format(ChunkNotification.forSaleNotificationFormat, TownyEconomyHandler.getFormattedBalance(cost)).replaceAll("[\\[\\]]", "") + " " + translator.of("msg_click_purchase")).color(NamedTextColor.YELLOW).append(Component.newline());
+							forSaleComponent = TownyComponents.miniMessage(String.format(ChunkNotification.forSaleNotificationFormat, TownyEconomyHandler.getFormattedBalance(cost)).replaceAll("[\\[\\]]", "") + " " + translator.of("msg_click_purchase")).color(NamedTextColor.YELLOW).append(Component.newline());
 					}
 					
 					if (townblock.getClaimedAt() > 0)
@@ -224,7 +225,7 @@ public class TownyAsciiMap {
 						if (getWildernessMapDataMap().containsKey(wc))
 							getWildernessMapDataMap().remove(wc);
 						WildernessMapEvent wildMapEvent = new WildernessMapEvent(wc);
-						Bukkit.getPluginManager().callEvent(wildMapEvent);
+						BukkitTools.fireEvent(wildMapEvent);
 						symbol = wildMapEvent.getMapSymbol();
 						hoverText = wildMapEvent.getHoverText();
 						clickCommand = wildMapEvent.getClickCommand();
@@ -249,27 +250,25 @@ public class TownyAsciiMap {
 
 		// Output
 		TownyMessaging.sendMessage(player, ChatTools.formatTitle(translator.of("towny_map_header") + Colors.White + "(" + pos + ")"));
-		Component map = Component.empty();
+		Component[] map = new Component[lineHeight];
 		Component[] help = generateHelp(player);
 		
 		int lineCount = 0;
 		// Variables have been rotated to fit N/S/E/W properly
 		for (int my = 0; my < lineHeight; my++) {
-			if (lineCount != 0)
-				map = map.append(Component.newline());
-
-			map = map.append(compass[lineCount < compass.length ? lineCount : 0]);
+			map[lineCount] = Component.empty().append(compass[lineCount < compass.length ? lineCount : 0]);
 
 			for (int mx = lineWidth - 1; mx >= 0; mx--)
-				map = map.append(townyMap[mx][my]);
+				map[lineCount] = map[lineCount].append(townyMap[mx][my]);
 
 			if (lineCount < help.length)
-				map = map.append(help[lineCount]);
+				map[lineCount] = map[lineCount].append(help[lineCount]);
 
 			lineCount++;
 		}
 		
-		Towny.getAdventure().player(player).sendMessage(map);
+		for (Component component : map)
+			Towny.getAdventure().player(player).sendMessage(component);
 
 		TownBlock townblock = TownyAPI.getInstance().getTownBlock(plugin.getCache(player).getLastLocation());
 		TownyMessaging.sendMsg(player, translator.of("status_towny_map_town_line", 

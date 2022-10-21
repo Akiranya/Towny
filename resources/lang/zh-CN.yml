@@ -1,6 +1,5 @@
 ---
 name: Towny
-version: 0.155
 language: Chinese
 author: ElgarL
 website: 'http://townyadvanced.github.io/'
@@ -269,7 +268,7 @@ msg_new_mayor: '&b%s 成为了新一届的城主!'
 msg_new_nation: '&b%s 建立了一个名为 %s 的国家'
 msg_new_town: '&b%s 建立了一个名为 %s 的城镇'
 msg_plot_for_sale: '&b%s 将 (%s) 区块挂出出售!'
-msg_plot_for_sale_amount: '&b%s put the plot (%s) up for sale for %s!'
+msg_plot_for_sale_amount: '&b%s 出售土地 (%s) 售价：%s！'
 msg_plot_set_type: '&b设置土地类型为 %s'
 msg_cache_block_error: '&c城镇没有你的信息. 请尝试重新登录.'
 msg_cache_block_error_wild: '&c你不能在荒野中 %s .'
@@ -702,8 +701,8 @@ msg_bankrupt_town2: '&b%s 城镇因资金不足而倒闭.'
 msg_bankrupt_nation2: '&b%s 因国库已空而灭亡.'
 status_embassy_town: '驻有大使馆于'
 #Added in 0.51:
-msg_error_invalid_comparator_nation: '&bInvalid comparator. Try %s.'
-msg_error_invalid_comparator_town: '&bInvalid comparator. Try %s.'
+msg_error_invalid_comparator_nation: '&b无效的比较器。你或许可以试试%s。'
+msg_error_invalid_comparator_town: '&b无效的比较器。你或许可以试试%s。'
 msg_err_merging_for_kings_only: '&b只有国家领导者能合并。'
 msg_err_king_of_that_nation_is_not_online: '&b合并失败： %s 和 %s 的国家领导者不在线。'
 nation1_has_merged_with_nation2: '&6国家 %s t同意与 %s 合并.'
@@ -1137,7 +1136,6 @@ msg_err_you_cannot_remove_the_last_cell: '在添加另一个牢房之前，您�
 msg_do_not_log_out_while_waiting_to_be_teleported: '传送至监狱前请不要登出，这样做是致命的。'
 jail_plu: '监狱'
 jail_sing: '监狱'
-msg_player_has_been_sent_to_jail_into_cell_number_x_for_x_hours_by_x: '%s已经被送进%s的%s号牢房%s小时了，由%s执行。'
 msg_resident_has_not_played_long_enough_to_be_jailed: '%s游玩的时间太短，无法被监禁，请再等待%s'
 #Added in 0.108
 msg_town_not_peaceful: '&b城镇的和平已被打破。'
@@ -1494,29 +1492,29 @@ msg_err_nation_unaffiliated: '这个国家不隶属于你所在国。'
 msg_err_town_unaffiliated: '这个城镇不隶属于你所在区域。'
 #Added in 0.152
 #Message shown when a player tries to add a jail cell location where one already exists.
-msg_err_this_location_already_has_a_jailcell: 'This location already has a jail cell.'
+msg_err_this_location_already_has_a_jailcell: '这个位置已经有一个监狱了。'
 #Title line of the /plot perm hud.
-msg_perm_hud_title: 'Plot Perms'
+msg_perm_hud_title: '土地权限'
 #Seen in /plot perm hud:
-msg_perm_hud_build: 'Build: '
+msg_perm_hud_build: '建造: '
 #Seen in /plot perm hud:
-msg_perm_hud_destroy: 'Destroy: '
+msg_perm_hud_destroy: '破坏: '
 #Seen in /plot perm hud:
-msg_perm_hud_switch: 'Switch: '
+msg_perm_hud_switch: '交互: '
 #Seen in /plot perm hud:
-msg_perm_hud_item_use: 'Item: '
+msg_perm_hud_item_use: '使用物品: '
 #Seen in /plot perm hud:
-msg_perm_hud_plot_type: 'Type: '
+msg_perm_hud_plot_type: '类型: '
 #Seen in /plot perm hud:
 msg_perm_hud_pvp: 'PVP: '
 #Seen in /plot perm hud:
-msg_perm_hud_explosions: 'Explosions: '
+msg_perm_hud_explosions: '爆炸: '
 #Seen in /plot perm hud:
-msg_perm_hud_firespread: 'Firespread: '
+msg_perm_hud_firespread: '火焰蔓延: '
 #Seen in /plot perm hud:
-msg_perm_hud_mobspawns: 'Mob Spawns: '
+msg_perm_hud_mobspawns: '生物生成: '
 #Seen in /plot perm hud:
-msg_perm_hud_key: 'Key'
+msg_perm_hud_key: '值'
 #Seen in /plot perm hud:
 msg_perm_hud_friend: 'friend'
 #Seen in /plot perm hud:
@@ -1549,3 +1547,21 @@ msg_comptype_upkeep: 'Upkeep'
 msg_town_upkeep_setting_set_to: 'The town %s has had their upkeep setting set to %s.'
 #Shown when a player tries to set a plot type but their town has reached the limit, first number is the limit and the string is the type name.
 msg_town_plot_type_limit_reached: 'Your town has reached the limit of %d %s plots.'
+#Added in 0.156
+msg_spawn_cost_free: 'Free'
+#Message shown when someone tries to set a plot's type to one already set.
+msg_plot_already_of_type: 'This plot is already a %s type.'
+msg_town_board_reset: '&bTown board reset.'
+msg_town_has_no_jailslots: 'The town jail is full.'
+msg_player_has_been_sent_to_jail_into_cell_number_x_for_x_hours_by_x_for_x_bail: '%s has been sent to %s into cell number %s for %s hours with a bail of %s by %s.'
+msg_player_has_been_sent_to_jail_into_cell_number_x_for_x_hours_by_x: '%s已经被送进%s的%s号牢房%s小时了，由%s执行。'
+msg_you_have_been_jailed_your_bail_is_x: 'You have been jailed, your bail is %s.'
+msg_err_higher_than_max_allowed_bail_x: 'Your set bail was higher then the maximum which is %s.'
+msg_err_higher_than_max_allowed_hours_x: 'Your set hours were higher then the maximum which is %s.'
+msg_not_enough_money_in_bank_to_jail_x_fee_is_x: 'Not enough in town bank to jail %s, fee is %s.'
+msg_you_were_released_as_town_ran_out_of_slots: 'Your jailers let you free to make space.'
+msg_x_has_been_released_as_jail_slots_ran_out: '%s has been released to make space for another prisoner.'
+msg_you_were_released_as_town_ran_out_of_upkeep_funds: 'You have been released as your jailers can no longer afford to keep you imprisoned.'
+msg_x_has_been_released_ran_out_of_upkeep_funds: '%s has been released due to a lack of funds in the Town bank.'
+msg_x_has_been_withdrawn_for_upkeep_of_prisoner_x: '%s withdrawn from Town bank to pay for upkeep for prisoner %s.'
+msg_x_has_been_withdrawn_for_jailing_of_prisoner_x: '%s withdrawn from Town bank to pay for jailing of %s.'

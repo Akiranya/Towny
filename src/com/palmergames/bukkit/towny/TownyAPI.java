@@ -374,8 +374,11 @@ public class TownyAPI {
      * @return {@link List} of all online {@link Player}s in the specified {@link ResidentList}.
      */
     public List<Player> getOnlinePlayers(ResidentList owner) {
-        return Bukkit.getOnlinePlayers().stream().filter(player -> owner.hasResident(player.getName())).collect(Collectors.toList());
-    }
+		final List<Player> players = new ArrayList<>(Bukkit.getOnlinePlayers());
+		
+		players.removeIf(player -> !owner.hasResident(player.getName()));
+		return players;
+	}
     
     /**
      * Gets all online {@link Player}s for a specific {@link Town}.
@@ -673,11 +676,16 @@ public class TownyAPI {
         return onlineResidents;
     }
     
-    public void requestTeleport(Player player, Location spawnLoc) {
+	public void requestTeleport(Player player, Location spawnLoc) {
+		requestTeleport(player, spawnLoc, 0);
+	}
+
+    public void requestTeleport(Player player, Location spawnLoc, int cooldown) {
+    	
     	Resident resident = TownyUniverse.getInstance().getResident(player.getUniqueId());
     	
     	if (resident != null) {
-			TeleportWarmupTimerTask.requestTeleport(resident, spawnLoc);
+			TeleportWarmupTimerTask.requestTeleport(resident, spawnLoc, cooldown);
 		}
     }
     
@@ -754,9 +762,7 @@ public class TownyAPI {
 		int nationZoneRadius = nearestTown.getNationZoneSize();
 
 		if (distance <= nationZoneRadius) {
-			NationZoneTownBlockStatusEvent event = new NationZoneTownBlockStatusEvent(nearestTown);
-			Bukkit.getPluginManager().callEvent(event);
-			if (event.isCancelled())
+			if (BukkitTools.isEventCancelled(new NationZoneTownBlockStatusEvent(nearestTown)))
 				return TownBlockStatus.UNCLAIMED_ZONE;
 			
 			return TownBlockStatus.NATION_ZONE;
@@ -909,5 +915,19 @@ public class TownyAPI {
 	@Deprecated
 	public boolean isActiveResident(Resident resident) {
 		return resident.isOnline();
+	}
+	
+	@Nullable
+	public Town getTown(@NotNull Player player) {
+		Resident resident = getResident(player);
+		
+		return resident == null ? null : resident.getTownOrNull();
+	}
+	
+	@Nullable
+	public Nation getNation(@NotNull Player player) {
+		Resident resident = getResident(player);
+		
+		return resident == null ? null : resident.getNationOrNull();
 	}
 }

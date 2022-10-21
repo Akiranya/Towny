@@ -22,15 +22,16 @@ import com.palmergames.bukkit.towny.object.Translation;
 import com.palmergames.bukkit.towny.object.spawnlevel.SpawnLevel;
 import com.palmergames.bukkit.towny.permissions.PermissionNodes;
 import com.palmergames.bukkit.towny.utils.EntityTypeUtil;
+import com.palmergames.bukkit.util.BukkitTools;
 import com.palmergames.bukkit.util.ItemLists;
 import com.palmergames.util.FileMgmt;
 import com.palmergames.util.StringMgmt;
 import com.palmergames.util.TimeTools;
 
-import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.EntityType;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
@@ -48,6 +49,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class TownySettings {
@@ -71,6 +73,8 @@ public class TownySettings {
 	private static final EnumSet<Material> itemUseMaterials = EnumSet.noneOf(Material.class);
 	private static final EnumSet<Material> switchUseMaterials = EnumSet.noneOf(Material.class);
 	private static final List<Class<?>> protectedMobs = new ArrayList<>();
+	
+	private static final Map<NamespacedKey, Consumer<CommentedConfiguration>> CONFIG_RELOAD_LISTENERS = new HashMap<>();
 	
 	public static void newTownLevel(int numResidents, String namePrefix, String namePostfix, String mayorPrefix, String mayorPostfix, int townBlockLimit, double townUpkeepMultiplier, int townOutpostLimit, int townBlockBuyBonusLimit, double debtCapModifier, Map<String, Integer> townBlockTypeLimits) {
 
@@ -317,6 +321,9 @@ public class TownySettings {
 		loadProtectedMobsList();
 		ChunkNotification.loadFormatStrings();
 		TownBlockTypeHandler.Migrator.migrate();
+		
+		// Always run reload consumers after everything else is reloaded.
+		CONFIG_RELOAD_LISTENERS.values().forEach(consumer -> consumer.accept(config));
 	}
 	
 	private static void loadProtectedMobsList() {
@@ -406,15 +413,15 @@ public class TownySettings {
 
 	public static boolean getBoolean(ConfigNodes node) {
 
-		return Boolean.parseBoolean(config.getString(node.getRoot().toLowerCase(), node.getDefault()));
+		return Boolean.parseBoolean(config.getString(node.getRoot().toLowerCase(Locale.ROOT), node.getDefault()));
 	}
 
 	public static double getDouble(ConfigNodes node) {
 
 		try {
-			return Double.parseDouble(config.getString(node.getRoot().toLowerCase(), node.getDefault()).trim());
+			return Double.parseDouble(config.getString(node.getRoot().toLowerCase(Locale.ROOT), node.getDefault()).trim());
 		} catch (NumberFormatException e) {
-			sendError(node.getRoot().toLowerCase() + " from config.yml");
+			sendError(node.getRoot().toLowerCase(Locale.ROOT) + " from config.yml");
 			return 0.0;
 		}
 	}
@@ -422,23 +429,23 @@ public class TownySettings {
 	public static int getInt(ConfigNodes node) {
 
 		try {
-			return Integer.parseInt(config.getString(node.getRoot().toLowerCase(), node.getDefault()).trim());
+			return Integer.parseInt(config.getString(node.getRoot().toLowerCase(Locale.ROOT), node.getDefault()).trim());
 		} catch (NumberFormatException e) {
-			sendError(node.getRoot().toLowerCase() + " from config.yml");
+			sendError(node.getRoot().toLowerCase(Locale.ROOT) + " from config.yml");
 			return 0;
 		}
 	}
 
 	public static String getString(ConfigNodes node) {
 
-		return config.getString(node.getRoot().toLowerCase(), node.getDefault());
+		return config.getString(node.getRoot().toLowerCase(Locale.ROOT), node.getDefault());
 	}
 
 	public static String getString(String root, String def) {
 
-		String data = config.getString(root.toLowerCase(), def);
+		String data = config.getString(root.toLowerCase(Locale.ROOT), def);
 		if (data == null) {
-			sendError(root.toLowerCase() + " from config.yml");
+			sendError(root.toLowerCase(Locale.ROOT) + " from config.yml");
 			return "";
 		}
 		return data;
@@ -453,7 +460,7 @@ public class TownySettings {
 				try {
 					list.add(Integer.parseInt(aStrArray.trim()));
 				} catch (NumberFormatException e) {
-					sendError(node.getRoot().toLowerCase() + " from config.yml");
+					sendError(node.getRoot().toLowerCase(Locale.ROOT) + " from config.yml");
 				}
 			}
 		return list;
@@ -461,7 +468,7 @@ public class TownySettings {
 
 	public static List<String> getStrArr(ConfigNodes node) {
 
-		String[] strArray = getString(node.getRoot().toLowerCase(), node.getDefault()).split(",");
+		String[] strArray = getString(node.getRoot().toLowerCase(Locale.ROOT), node.getDefault()).split(",");
 		List<String> list = new ArrayList<>();
 		if (strArray.length > 0) {
 			for (String aStrArray : strArray)
@@ -476,14 +483,14 @@ public class TownySettings {
 		try {
 			return TimeTools.getSeconds(getString(node));
 		} catch (NumberFormatException e) {
-			sendError(node.getRoot().toLowerCase() + " from config.yml");
+			sendError(node.getRoot().toLowerCase(Locale.ROOT) + " from config.yml");
 			return 1;
 		}
 	}
 
 	public static void addComment(String root, String... comments) {
 
-		newConfig.addComment(root.toLowerCase(), comments);
+		newConfig.addComment(root.toLowerCase(Locale.ROOT), comments);
 	}
 
 	/**
@@ -516,7 +523,7 @@ public class TownySettings {
 				setNewProperty(root.getRoot(), root.getDefault());
 				setTownBlockTypes();
 			} else	
-				setNewProperty(root.getRoot(), (config.get(root.getRoot().toLowerCase()) != null) ? config.get(root.getRoot().toLowerCase()) : root.getDefault());
+				setNewProperty(root.getRoot(), (config.get(root.getRoot().toLowerCase(Locale.ROOT)) != null) ? config.get(root.getRoot().toLowerCase(Locale.ROOT)) : root.getDefault());
 
 		}
 
@@ -1102,7 +1109,7 @@ public class TownySettings {
 	public static int getNationBonusBlocks(Nation nation) {
 		int bonusBlocks = getNationLevel(nation).townBlockLimitBonus();
 		NationBonusCalculationEvent calculationEvent = new NationBonusCalculationEvent(nation, bonusBlocks);
-		Bukkit.getPluginManager().callEvent(calculationEvent);
+		BukkitTools.fireEvent(calculationEvent);
 		return calculationEvent.getBonusBlocks();
 	}
 
@@ -1561,16 +1568,16 @@ public class TownySettings {
 
 	public static void setProperty(String root, Object value) {
 
-		config.set(root.toLowerCase(), value.toString());
+		config.set(root.toLowerCase(Locale.ROOT), value.toString());
 	}
 
 	private static void setNewProperty(String root, Object value) {
 
 		if (value == null) {
-			TownyMessaging.sendDebugMsg("value is null for " + root.toLowerCase());
+			TownyMessaging.sendDebugMsg("value is null for " + root.toLowerCase(Locale.ROOT));
 			value = "";
 		}
-		newConfig.set(root.toLowerCase(), value.toString());
+		newConfig.set(root.toLowerCase(Locale.ROOT), value.toString());
 	}
 	
 	public static void setLanguage(String lang) {
@@ -1580,7 +1587,7 @@ public class TownySettings {
 
 	public static Object getProperty(String root) {
 
-		return config.get(root.toLowerCase());
+		return config.get(root.toLowerCase(Locale.ROOT));
 	}
 
 	public static double getClaimPrice() {
@@ -1768,6 +1775,14 @@ public class TownySettings {
 		return getBoolean(ConfigNodes.JAIL_IS_JAILING_ATTACKING_ENEMIES);
 	}
 	
+	public static int getMaxJailedNewJailBehavior() {
+		return getInt(ConfigNodes.JAIL_MAX_JAILED_NEWJAIL_BEHAVIOR);
+	}
+
+	public static boolean isJailBookEnabled() {
+		return getBoolean(ConfigNodes.JAIL_IS_JAILBOOK_ENABLED);
+	}
+
 	public static boolean isJailingAttackingOutlaws() {
 		
 		return getBoolean(ConfigNodes.JAIL_IS_JAILING_ATTACKING_OUTLAWS);
@@ -1776,6 +1791,14 @@ public class TownySettings {
 	public static int getJailedOutlawJailHours() {
 		
 		return getInt(ConfigNodes.JAIL_OUTLAW_JAIL_HOURS);
+	}
+
+	public static int getJailedPOWJailHours() {
+		return getInt(ConfigNodes.JAIL_POW_JAIL_HOURS);
+	}
+
+	public static int getJailedMaxHours() {
+		return getInt(ConfigNodes.JAIL_MAX_JAIL_HOURS);
 	}
 
 	public static boolean JailAllowsTeleportItems() {
@@ -1796,6 +1819,22 @@ public class TownySettings {
 	public static double getBailAmount() {
 		
 		return getDouble(ConfigNodes.JAIL_BAIL_BAIL_AMOUNT);
+	}
+
+	public static double getBailMaxAmount() {
+		return getDouble(ConfigNodes.JAIL_BAIL_BAILMAX_AMOUNT);
+	}
+
+	public static double initialJailFee() {
+		return getDouble(ConfigNodes.JAIL_FEE_INITIAL_AMOUNT);
+	}
+
+	public static double hourlyJailFee() {
+		return getDouble(ConfigNodes.JAIL_FEE_HOURLY_AMOUNT);
+	}
+
+	public static int getMaxJailedPlayerCount() {
+		return getInt(ConfigNodes.JAIL_MAX_JAILED_COUNT);
 	}
 	
 	public static double getBailAmountMayor() {
@@ -1840,7 +1879,7 @@ public class TownySettings {
 			return 0.0;
 		
 		TownUpkeepCalculationEvent event = new TownUpkeepCalculationEvent(town, getTownUpkeepCostRaw(town));
-		Bukkit.getPluginManager().callEvent(event);
+		BukkitTools.fireEvent(event);
 		return event.getUpkeep();
 	}
 
@@ -1926,10 +1965,14 @@ public class TownySettings {
 
 		return getBoolean(ConfigNodes.ECO_UPKEEP_PLOTPAYMENTS);
 	}
+	
+	public static boolean isNegativePlotTaxAllowed() {
+		return getBoolean(ConfigNodes.ECO_UPKEEP_PLAYEROWNEDPLOTPAYMENTS);
+	}
 
 	public static double getTownPenaltyUpkeepCost(Town town) {
 		TownUpkeepPenalityCalculationEvent event = new TownUpkeepPenalityCalculationEvent(town, getTownPenaltyUpkeepCostRaw(town));
-		Bukkit.getPluginManager().callEvent(event);
+		BukkitTools.fireEvent(event);
 		return event.getUpkeep();
 	}
 
@@ -1967,7 +2010,7 @@ public class TownySettings {
 			return 0.0;
 		
 		NationUpkeepCalculationEvent event = new NationUpkeepCalculationEvent(nation, getNationUpkeepCostRaw(nation));
-		Bukkit.getPluginManager().callEvent(event);
+		BukkitTools.fireEvent(event);
 		return event.getUpkeep();
 	}
 
@@ -2862,6 +2905,14 @@ public class TownySettings {
 		return getString(ConfigNodes.NOTIFICATION_TITLES_WILDERNESS_SUBTITLE);
 	}
 
+	public static String getNotificationTitlesNationNameFormat() {
+		return getString(ConfigNodes.NOTIFICATION_TITLES_NATIONNAME_FORMAT);
+	}
+	
+	public static String getNotificationTitlesNationCapitalFormat() {
+		return getString(ConfigNodes.NOTIFICATION_TITLES_NATIONCAPITAL_FORMAT);
+	}
+	
 	public static double getTownRenameCost() {
 		return getDouble(ConfigNodes.ECO_TOWN_RENAME_COST);
 	}
@@ -2911,6 +2962,10 @@ public class TownySettings {
 	
 	public static String getPAPIRelationNone() {
 		return getString(ConfigNodes.FILTERS_PAPI_REL_FORMATTING_NONE);
+	}
+	
+	public static String getPAPIRelationNoTown() {
+		return getString(ConfigNodes.FILTERS_PAPI_REL_FORMATTING_NO_TOWN);
 	}
 	
 	public static String getPAPIRelationSameTown() {
@@ -3093,10 +3148,6 @@ public class TownySettings {
 		return getBoolean(ConfigNodes.PROT_CROP_TRAMPLE);
 	}
 
-	public static boolean isSculkSpreadPreventWhereMobsAreDisabled() {
-		return getBoolean(ConfigNodes.PROT_SCULK_SPREAD);
-	}
-
 	public static boolean isNotificationsAppearingOnBossbar() {
 		return getString(ConfigNodes.NOTIFICATION_NOTIFICATIONS_APPEAR_AS).equalsIgnoreCase("bossbar");
 	}
@@ -3271,5 +3322,21 @@ public class TownySettings {
 		return getString(ConfigNodes.ASCII_MAP_SYMBOLS_WILDERNESS);
 	}
 
+	public static void addReloadListener(NamespacedKey key, Consumer<CommentedConfiguration> consumer) {
+		if (!CONFIG_RELOAD_LISTENERS.containsKey(key))
+			CONFIG_RELOAD_LISTENERS.put(key, consumer);
+	}
+	
+	public static void removeReloadListener(NamespacedKey key) {
+		CONFIG_RELOAD_LISTENERS.remove(key);
+	}
+	
+	public static boolean doesNewDayUseTimer() {
+		return getBoolean(ConfigNodes.PLUGIN_NEWDAY_USES_JAVA_TIMER);
+	}
+	
+	public static List<String> getTownUnkickableRanks() {
+		return getStrArr(ConfigNodes.GTOWN_SETTINGS_UNKICKABLE_RANKS);
+	}
 }
 

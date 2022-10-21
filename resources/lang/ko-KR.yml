@@ -1,6 +1,5 @@
 ---
 name: Towny
-version: 0.155
 language: 한국어
 author: Daybreak 새벽
 website: 'http://townyadvanced.github.io/'
@@ -700,7 +699,7 @@ msg_couldnt_pay_town_tax_multiple: '&b다음 주민들은 마을 세금을 감�
 msg_couldnt_pay_plot_taxes_multiple: '&b다음 주민들은 자신들이 소유하는 토지들의 일부 또는 전체에 대하여 세금을 감당할 수 없었습니다: '
 msg_bankrupt_town2: '&b%s은(는) 마을을 유지할 여유가 없었습니다.'
 msg_bankrupt_nation2: '&b%s은(는) 국가를 유지할 여유가 없었습니다.'
-status_embassy_town: 'Embassies in'
+status_embassy_town: '대사관'
 #Added in 0.51:
 msg_error_invalid_comparator_nation: '&bInvalid comparator. Try %s.'
 msg_error_invalid_comparator_town: '&bInvalid comparator. Try %s.'
@@ -889,7 +888,7 @@ msg_err_plot_belongs_to_group_toggle: 'Plot belongs to a group, use /plot group 
 #Added in 0.85
 msg_set_perms_reset_single: '&bSuccessfully reset permissions on this plot.'
 #Added in 0.86
-status_bank_bankrupt: '(BANKRUPT)'
+status_bank_bankrupt: '(파산)'
 msg_warning_bankrupt: '&4*** 경고, %s 는 금고에 돈이 없어 새 날이 되면 파산할 것 입니다 ***'
 msg_town_bankrupt_by_upkeep: '&b%s 마을이 유지비를 감당 할 수 없어 파산 하였습니다.'
 msg_town_bankrupt_by_upkeep_multiple: '&b다음 마을들이 유지비를 감당 할 수 없어 파산하였습니다.: '
@@ -930,7 +929,7 @@ status_plot_clear_deletion: 'PlotClearBlockDelete:'
 msg_err_plot_clear_disabled_in_this_world: 'The /plot clear command is disabled in this world.'
 #Added in 0.91
 msg_universe_attribution: '제작자들: '
-msg_universe_contributors: ' And contributors like you. '
+msg_universe_contributors: ' 그리고 당신 같은 조력자들 말이에요. '
 msg_universe_heart: '<3'
 townblock_plu: 'TownBlocks'
 #Added in 0.92
@@ -1112,7 +1111,7 @@ msg_plot_perm_claimed_at: 'Claimed at:'
 msg_wilderness_use_x_in_all_worlds: 'Wilderness use turned %s in all worlds.'
 msg_regenerations_use_x_in_all_worlds: 'Regenerations turned %s in all worlds.'
 #Added in 0.106
-msg_command_outsider_blocked: 'You cannot run that command because you don''t live in %s.'
+msg_command_outsider_blocked: '%s에서 거주하고 있지 않기 때문에 해당 명령어를 실행할 수 없습니다.'
 #Added in 0.107
 msg_jailed_for_x_hours: ' for %s hours.'
 msg_err_this_jail_has_no_cells: 'This jail has no cells.'
@@ -1137,7 +1136,6 @@ msg_err_you_cannot_remove_the_last_cell: 'You cannot remove the last jail cell i
 msg_do_not_log_out_while_waiting_to_be_teleported: 'Do not log out before being teleported to jail, it would be fatal.'
 jail_plu: '감옥들'
 jail_sing: '감옥'
-msg_player_has_been_sent_to_jail_into_cell_number_x_for_x_hours_by_x: '%s has been sent to %s into cell number %s for %s hours by %s.'
 msg_resident_has_not_played_long_enough_to_be_jailed: '%s hasn''t played long enough to be jailed, wait another %s'
 #Added in 0.108
 msg_town_not_peaceful: '&bTown couldn''t afford it''s peaceful state.'
@@ -1407,9 +1405,9 @@ msg_confirmation_timed_out: 'Confirmation Timed Out.'
 tc_player_channel_sound_muted: 'The channel sound has been muted'
 tc_player_channel_sound_unmuted: 'The channel sound has been unmuted'
 #Added in 0.135
-msg_cant_toggle_pvp_outsider_in_plot: 'There is an outsider in your plot, you can''t change your pvp status!'
+msg_cant_toggle_pvp_outsider_in_plot: '외부인이 귀하의 마을에 있습니다. 마을 PVP 설정을 변경할 수 없습니다.'
 #Added in 0.136
-msg_view_on_web: 'Click to view on the web.'
+msg_view_on_web: '&7Click to view on the web.'
 #Added in 0.137
 #Shown globally when a town merges with another town.
 town1_has_merged_with_town2: '&6The town %s has agreed to merge together with the prevailing town of %s.'
@@ -1518,17 +1516,17 @@ msg_perm_hud_mobspawns: 'Mob Spawns: '
 #Seen in /plot perm hud:
 msg_perm_hud_key: 'Key'
 #Seen in /plot perm hud:
-msg_perm_hud_friend: 'friend'
+msg_perm_hud_friend: '친구'
 #Seen in /plot perm hud:
-msg_perm_hud_town: 'town'
+msg_perm_hud_town: '마을'
 #Seen in /plot perm hud:
-msg_perm_hud_ally: 'ally'
+msg_perm_hud_ally: '동맹'
 #Seen in /plot perm hud:
-msg_perm_hud_resident: 'resident'
+msg_perm_hud_resident: '시민'
 #Seen in /plot perm hud:
-msg_perm_hud_nation: 'nation'
+msg_perm_hud_nation: '국가'
 #Seen in /plot perm hud:
-msg_perm_hud_outsider: 'outsider'
+msg_perm_hud_outsider: '외부인'
 #Seen in /plot perm hud:
 msg_perm_hud_plot_name: 'Plot: '
 #Added in 0.153
@@ -1549,3 +1547,21 @@ msg_comptype_upkeep: 'Upkeep'
 msg_town_upkeep_setting_set_to: 'The town %s has had their upkeep setting set to %s.'
 #Shown when a player tries to set a plot type but their town has reached the limit, first number is the limit and the string is the type name.
 msg_town_plot_type_limit_reached: 'Your town has reached the limit of %d %s plots.'
+#Added in 0.156
+msg_spawn_cost_free: 'Free'
+#Message shown when someone tries to set a plot's type to one already set.
+msg_plot_already_of_type: 'This plot is already a %s type.'
+msg_town_board_reset: '&bTown board reset.'
+msg_town_has_no_jailslots: 'The town jail is full.'
+msg_player_has_been_sent_to_jail_into_cell_number_x_for_x_hours_by_x_for_x_bail: '%s has been sent to %s into cell number %s for %s hours with a bail of %s by %s.'
+msg_player_has_been_sent_to_jail_into_cell_number_x_for_x_hours_by_x: '%s has been sent to %s into cell number %s for %s hours by %s.'
+msg_you_have_been_jailed_your_bail_is_x: 'You have been jailed, your bail is %s.'
+msg_err_higher_than_max_allowed_bail_x: 'Your set bail was higher then the maximum which is %s.'
+msg_err_higher_than_max_allowed_hours_x: 'Your set hours were higher then the maximum which is %s.'
+msg_not_enough_money_in_bank_to_jail_x_fee_is_x: 'Not enough in town bank to jail %s, fee is %s.'
+msg_you_were_released_as_town_ran_out_of_slots: 'Your jailers let you free to make space.'
+msg_x_has_been_released_as_jail_slots_ran_out: '%s has been released to make space for another prisoner.'
+msg_you_were_released_as_town_ran_out_of_upkeep_funds: 'You have been released as your jailers can no longer afford to keep you imprisoned.'
+msg_x_has_been_released_ran_out_of_upkeep_funds: '%s has been released due to a lack of funds in the Town bank.'
+msg_x_has_been_withdrawn_for_upkeep_of_prisoner_x: '%s withdrawn from Town bank to pay for upkeep for prisoner %s.'
+msg_x_has_been_withdrawn_for_jailing_of_prisoner_x: '%s withdrawn from Town bank to pay for jailing of %s.'

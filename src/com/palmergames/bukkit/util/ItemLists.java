@@ -116,6 +116,7 @@ public class ItemLists {
 	/**
 	 * List of Signs.
 	 */
+	// TODO: Verify that the hanging sign material ends with _SIGN
 	public static final ItemLists SIGNS = PredicateList.builder().endsWith("_SIGN").build();
 
 	/**
@@ -131,7 +132,8 @@ public class ItemLists {
 	/**
 	 * List of Boats.
 	 */
-	public static final ItemLists BOATS = PredicateList.builder().endsWith("_BOAT").build();
+	// TODO: Verify that bamboo raft w/ chest material ends with _RAFT
+	public static final ItemLists BOATS = PredicateList.builder().endsWith("_BOAT").endsWith("_RAFT").build();
 	
 	/**
 	 * List of Minecarts.
@@ -217,6 +219,16 @@ public class ItemLists {
 	 * List of Campfires
 	 */
 	public static final ItemLists CAMPFIRES = ItemLists.of("CAMPFIRE","SOUL_CAMPFIRE");
+	
+	/**
+	 * List of blocks that can hold books
+	 */
+	public static final ItemLists BOOK_CONTAINERS = ItemLists.of("CHISELED_BOOKSHELF","LECTERN");
+
+	/**
+	 * List of placeable books
+	 */
+	public static final ItemLists PLACEABLE_BOOKS = ItemLists.of("BOOK", "ENCHANTED_BOOK", "WRITEABLE_BOOK", "WRITTEN_BOOK");
 	
 	/**
 	 * List of harvestable berries
