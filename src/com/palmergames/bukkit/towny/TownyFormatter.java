@@ -104,7 +104,7 @@ public class TownyFormatter {
 		screen.addComponentOf("perm", colourKeyValue(translator.of("status_perm"), ((owner instanceof Resident) ? townBlock.getPermissions().getColourString().replace("n", "t") : townBlock.getPermissions().getColourString().replace("f", "r"))));
 		screen.addComponentOf("pvp", colourKeyValue(translator.of("status_pvp"), ((!preventPVP) ? translator.of("status_on"): translator.of("status_off")))); 
 		screen.addComponentOf("explosion", colourKeyValue(translator.of("explosions"), ((world.isForceExpl() || townBlock.getPermissions().explosion) ? translator.of("status_on"): translator.of("status_off")))); 
-		screen.addComponentOf("firespread", colourKeyValue(translator.of("firespread"), ((town.isFire() || world.isForceFire() || townBlock.getPermissions().fire) ? translator.of("status_on"):translator.of("status_off")))); 
+		screen.addComponentOf("firespread", colourKeyValue(translator.of("firespread"), ((world.isForceFire() || townBlock.getPermissions().fire) ? translator.of("status_on"):translator.of("status_off")))); 
 		screen.addComponentOf("mobspawns", colourKeyValue(translator.of("mobspawns"), ((world.isForceTownMobs() || townBlock.getPermissions().mobs) ?  translator.of("status_on"): translator.of("status_off"))));
 
 		if (townBlock.hasPlotObjectGroup())
@@ -277,6 +277,9 @@ public class TownyFormatter {
 		// Created Date
 		if (town.getRegistered() != 0) 
 			screen.addComponentOf("registered", colourKeyValue(translator.of("status_founded"), registeredFormat.format(town.getRegistered())));
+		
+		// Founded by:
+		screen.addComponentOf("founder", colourKeyValue(translator.of("status_founded_by"), town.getFounder()));
 
 		// Town Size: 0 / 16 [Bought: 0/48] [Bonus: 0] [Home: 33,44]
 		if (!town.hasUnlimitedClaims())
@@ -340,12 +343,15 @@ public class TownyFormatter {
 				addTownMoneyComponents(town, translator, screen);
 
 			// Mayor: MrSand
-			screen.addComponentOf("mayor", colourKeyValue(translator.of("rank_list_mayor"), town.getMayor().getFormattedName()),
+			if (town.getMayor() != null) {
+				screen.addComponentOf("mayor", colourKeyValue(translator.of("rank_list_mayor"), town.getMayor().getFormattedName()),
 					HoverEvent.showText(translator.component("registered_last_online", registeredFormat.format(town.getMayor().getRegistered()), lastOnlineFormatIncludeYear.format(town.getMayor().getLastOnline()))
 						.append(Component.newline())
 						.append(translator.component("status_hover_click_for_more"))),
 					ClickEvent.runCommand("/towny:resident " + town.getMayor().getName())
-					);
+				);
+			} else
+				screen.addComponentOf("mayor", colourKeyValue(translator.of("rank_list_mayor"), translator.of("status_no_town")));
 
 			// Nation: Azur Empire
 			if (town.hasNation()) {
@@ -614,27 +620,27 @@ public class TownyFormatter {
 	 * Utility methods used in the Status Screens.
 	 */
 	
-	private static String colourKeyValue(String key, String value) {
+	public static String colourKeyValue(String key, String value) {
 		return String.format(keyValueFormat, Translation.of("status_format_key_value_key"), key, Translation.of("status_format_key_value_value"), value); 
 	}
 	
-	private static String colourKey(String key) {
+	public static String colourKey(String key) {
 		return String.format(keyFormat, Translation.of("status_format_key_value_key"), key); 
 	}
 	
-	private static String colourKeyImportant(String key) {
+	public static String colourKeyImportant(String key) {
 		return String.format(keyFormat, Translation.of("status_format_key_important"), key);
 	}
 	
-	private static String colourBracketElement(String key, String value) {
+	public static String colourBracketElement(String key, String value) {
 		return String.format(bracketFormat, Translation.of("status_format_bracket_element"), key, value);
 	}
 	
-	private static String colourHoverKey(String key) {
+	public static String colourHoverKey(String key) {
 		return String.format(hoverFormat, Translation.of("status_format_hover_bracket_colour"), Translation.of("status_format_hover_key"), key, Translation.of("status_format_hover_bracket_colour"));
 	}
 	
-	private static String formatPopulationBrackets(int size) {
+	public static String formatPopulationBrackets(int size) {
 		return String.format(" %s[%s]", Translation.of("status_format_list_2"), size);
 	}
 	
@@ -786,8 +792,11 @@ public class TownyFormatter {
 			if (TownySettings.getUpkeepPenalty() > 0 && town.isOverClaimed())
 				screen.addComponentOf("upkeepPenalty", translator.of("status_splitter") + colourKey(translator.of("status_bank_town_penalty_upkeep")) + " " + colourKeyImportant(formatMoney(TownySettings.getTownPenaltyUpkeepCost(town))));
 			
-			if (town.isNeutral() && TownySettings.getTownNeutralityCost() > 0)
-				screen.addComponentOf("neutralityCost", translator.of("status_splitter") + colourKey(translator.of("status_neutrality_cost") + " " + colourKeyImportant(formatMoney(TownySettings.getTownNeutralityCost()))));
+			if (town.isNeutral()) {
+				double neutralCost = TownySettings.getTownNeutralityCost(town);
+				if (neutralCost > 0)
+					screen.addComponentOf("neutralityCost", translator.of("status_splitter") + colourKey(translator.of("status_neutrality_cost") + " " + colourKeyImportant(formatMoney(neutralCost))));
+			}
 
 			screen.addComponentOf("towntax", translator.of("status_splitter") + colourKey(translator.of("status_bank_town3")) + " " + colourKeyImportant(town.isTaxPercentage() ? town.getTaxes() + "%" : formatMoney(town.getTaxes())));
 		}
@@ -806,10 +815,13 @@ public class TownyFormatter {
 		if (TownySettings.isTaxingDaily()) {
 			if (TownySettings.getNationUpkeepCost(nation) > 0)
 				screen.addComponentOf("nationupkeep", translator.of("status_splitter") + colourKey(translator.of("status_bank_town2") + " " + colourKeyImportant(formatMoney(TownySettings.getNationUpkeepCost(nation)))));
-			if (nation.isNeutral() && TownySettings.getNationNeutralityCost() > 0)
-				screen.addComponentOf("neutralityCost", translator.of("status_splitter") + colourKey(translator.of("status_neutrality_cost") + " " + colourKeyImportant(formatMoney(TownySettings.getNationNeutralityCost()))));
+			if (nation.isNeutral()) {
+				double neutralCost = TownySettings.getNationNeutralityCost(nation);				
+				if (neutralCost > 0)
+					screen.addComponentOf("neutralityCost", translator.of("status_splitter") + colourKey(translator.of("status_neutrality_cost") + " " + colourKeyImportant(formatMoney(neutralCost))));
+			}
 
-			screen.addComponentOf("nationtax", translator.of("status_splitter") + colourKey(translator.of("status_nation_tax")) + " " + colourKeyImportant(formatMoney(nation.getTaxes())));
+			screen.addComponentOf("nationtax", translator.of("status_splitter") + colourKey(translator.of("status_nation_tax")) + " " + colourKeyImportant(nation.isTaxPercentage() ? nation.getTaxes() + "%" : formatMoney(nation.getTaxes())));
 		}
 	}
 
@@ -824,8 +836,10 @@ public class TownyFormatter {
 	 * @param translator Translator used in language selection.
 	 * @return Formatted 2nd line of the Town StatusScreen.
 	 */
-	private static List<String> getTownSubtitle(Town town, TownyWorld world, Translator translator) {
+	public static List<String> getTownSubtitle(Town town, TownyWorld world, Translator translator) {
 		List<String> sub = new ArrayList<>();
+		if (town.isCapital())
+			sub.add(translator.of("status_title_capital"));
 		if (!town.isAdminDisabledPVP() && (town.isPVP() || world.isForcePVP()))
 			sub.add(translator.of("status_title_pvp"));
 		if (town.isOpen())
@@ -845,7 +859,7 @@ public class TownyFormatter {
 	 * @param translator Translator used in language selection.
 	 * @return Formatted 2nd line of the Nation StatusScreen.
 	 */
-	private static List<String> getNationSubtitle(Nation nation, Translator translator) {
+	public static List<String> getNationSubtitle(Nation nation, Translator translator) {
 		List<String> sub = new ArrayList<>();
 		if (nation.isOpen())
 			sub.add(translator.of("status_title_open"));
@@ -933,7 +947,7 @@ public class TownyFormatter {
 	 */
 	private static boolean playerIsOnlineAndVisible(String name, CommandSender sender) {
 		if (sender instanceof Player player)
-			return BukkitTools.isOnline(name) && player.canSee(BukkitTools.getPlayer(name));
+			return BukkitTools.isOnline(name) && player.canSee(BukkitTools.getPlayerExact(name));
 		else if (sender instanceof ConsoleCommandSender)
 			return BukkitTools.isOnline(name);
 		else

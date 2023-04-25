@@ -92,12 +92,19 @@ public class TownyWorld extends TownyObject {
 		return uuid;
 	}
 	
+	@ApiStatus.Internal
 	public void setUUID(UUID uuid) {
 		this.uuid = uuid;
 	}
 
+	@Nullable
 	public World getBukkitWorld() {
-		return Bukkit.getWorld(uuid);
+		World world = this.uuid != null ? Bukkit.getWorld(this.uuid) : Bukkit.getWorld(getName());
+		
+		if (world == null)
+			world = Bukkit.getWorld(getName());
+		
+		return world;
 	}
 	
 	public HashMap<String, Town> getTowns() {
@@ -129,12 +136,12 @@ public class TownyWorld extends TownyObject {
 	public TownBlock getTownBlock(Coord coord) throws NotRegisteredException {
 		if (!hasTownBlock(coord))
 			throw new NotRegisteredException();
-		return TownyUniverse.getInstance().getTownBlock(new WorldCoord(this.getName(), coord));
+		return TownyUniverse.getInstance().getTownBlock(new WorldCoord(this.getName(), this.getUUID(), coord));
 	}
 
 	public boolean hasTownBlock(Coord key) {
 
-		return TownyUniverse.getInstance().hasTownBlock(new WorldCoord(this.getName(), key));
+		return TownyUniverse.getInstance().hasTownBlock(new WorldCoord(this.getName(), this.getUUID(), key));
 	}
 
 	public TownBlock getTownBlock(int x, int z) throws NotRegisteredException {
@@ -333,6 +340,43 @@ public class TownyWorld extends TownyObject {
 		setUnclaimedZoneItemUse(null);
 		setUnclaimedZoneIgnore(null);
 		setUnclaimedZoneName(null);
+		setUsingTowny(TownySettings.isUsingTowny());
+		setClaimable(TownySettings.isNewWorldClaimable());
+		setWarAllowed(TownySettings.isWarAllowed());
+		setPVP(TownySettings.isPvP());
+		setForcePVP(TownySettings.isForcingPvP());
+		setFriendlyFire(TownySettings.isFriendlyFireEnabled());
+		setFire(TownySettings.isFire());
+		setForceFire(TownySettings.isForcingFire());
+		setWorldMobs(TownySettings.isWorldMonstersOn());
+		setWildernessMobs(TownySettings.isWildernessMonstersOn());
+		setForceTownMobs(TownySettings.isForcingMonsters());
+		setExpl(TownySettings.isExplosions());
+		setForceExpl(TownySettings.isForcingExplosions());
+		setEndermanProtect(TownySettings.getEndermanProtect());
+		setDisableCreatureTrample(TownySettings.isCreatureTramplingCropsDisabled());
+		// reset unclaiming deletes entities.
+		unclaimDeleteEntityTypes = null;
+		setDeletingEntitiesOnUnclaim(TownySettings.isDeletingEntitiesOnUnclaim());
+		// reset unclaiming deletes blocks.
+		setUsingPlotManagementDelete(TownySettings.isUsingPlotManagementDelete());
+		plotManagementDeleteIds = null;
+		// mayor's plot clear
+		setUsingPlotManagementMayorDelete(TownySettings.isUsingPlotManagementMayorDelete());
+		plotManagementMayorDelete = null;
+		// revert on unclaim
+		setUsingPlotManagementRevert(TownySettings.isUsingPlotManagementRevert());
+		// revert ignore
+		plotManagementIgnoreIds = null;
+		// wilderness entity explosion revert
+		setUsingPlotManagementWildEntityRevert(TownySettings.isUsingPlotManagementWildEntityRegen());
+		entityExplosionProtection = null;
+		// wilderness block explosion revert
+		setUsingPlotManagementWildBlockRevert(TownySettings.isUsingPlotManagementWildBlockRegen());
+		blockExplosionProtection = null;
+		plotManagementWildRevertBlockWhitelist = null;
+		// Entities protected from explosions
+		entityExplosionProtection = null;
 	}
 
 	public void setUsingPlotManagementDelete(boolean using) {
@@ -703,23 +747,51 @@ public class TownyWorld extends TownyObject {
 	/**
 	 * Checks the distance from the closest homeblock.
 	 * 
+	 * @deprecated since 0.99.0.2 use {@link #getMinDistanceFromOtherTownsHomeBlocks(Coord)} instead.
+	 * 
 	 * @param key - Coord to check from.
 	 * @return the distance to nearest towns homeblock.
 	 */
+	@Deprecated
 	public int getMinDistanceFromOtherTowns(Coord key) {
+		return getMinDistanceFromOtherTownsHomeBlocks(key);
+	}
 
-		return getMinDistanceFromOtherTowns(key, null);
-
+	/**
+	 * Checks the distance from the closest homeblock.
+	 * 
+	 * @param key - Coord to check from.
+	 * @return the distance to nearest towns homeblock.
+	 */
+	public int getMinDistanceFromOtherTownsHomeBlocks(Coord key) {
+		return getMinDistanceFromOtherTownsHomeBlocks(key, null);
 	}
 
 	/**
 	 * Checks the distance from a another town's homeblock.
 	 * 
+	 * @deprecated since 0.99.0.2 use {@link #getMinDistanceFromOtherTownsHomeBlocks(Coord, Town)} instead.
+	 * 
 	 * @param key - Coord to check from.
 	 * @param homeTown Players town
 	 * @return the closest distance to another towns homeblock.
 	 */
+	@Deprecated
 	public int getMinDistanceFromOtherTowns(Coord key, Town homeTown) {
+		return getMinDistanceFromOtherTownsHomeBlocks(key, homeTown);
+	}
+
+	/**
+	 * Checks the distance from a another town's homeblock, or the distance to
+	 * another Town if homeTown is null.
+	 * 
+	 * @param key      Coord to check from.
+	 * @param homeTown The town belonging to a player, so that the town's own
+	 *                 homeblock is not returned, or null if this should apply to
+	 *                 any townblock, and not just homeblocks.
+	 * @return the closest distance to another towns homeblock.
+	 */
+	public int getMinDistanceFromOtherTownsHomeBlocks(Coord key, Town homeTown) {
 		double minSqr = -1;
 		final int keyX = key.getX();
 		final int keyZ = key.getZ();

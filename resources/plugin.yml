@@ -2,14 +2,14 @@ name: Towny
 main: com.palmergames.bukkit.towny.Towny
 version: ${project.version}
 api-version: ${project.bukkitAPIVersion}
-author: Shade, Modified by FuzzeWuzze. Forked by ElgarL. Forked by LlmDl.
-website: 'http://townyadvanced.github.io/'
+author: 'LlmDl, Warrior, and many contributors. Past lead devs: Shade, ElgarL.'
+website: 'https://townyadvanced.github.io/'
 prefix: Towny
 description: >
-    Resident-Town-Nation heirarchy combined with a grid based
-    protection system. Including a war event.
+    Resident-Town-Nation hierarchy combined with a grid based
+    protection system, many features and an expansive API.
 
-softdepend: [MultiVerse,Multiverse-Core,XcraftGate,My Worlds,Citizens,PersonalWorlds,WormholeXTremeWorlds,Vault,Reserve,MultiWorld,TheNewChat,PlaceholderAPI,Essentials,Hyperverse,GroupManager,iConomy,LuckPerms]
+softdepend: [MultiVerse,Multiverse-Core,XcraftGate,My_Worlds,Citizens,PersonalWorlds,WormholeXTremeWorlds,Vault,Reserve,MultiWorld,TheNewChat,PlaceholderAPI,Essentials,Hyperverse,GroupManager,iConomy,LuckPerms]
 
 ############################################################
 # +------------------------------------------------------+ #
@@ -111,6 +111,14 @@ permissions:
         default: false
         children:
             towny.town.spawn.outpost: true
+
+    towny.town.spawn.nation.bypass_public:
+        description: User is permitted to use /town spawn when they are a member of the same nation and even if the town isn't public while is_nation_ally_spawning_requiring_public_status is true.
+        default: false
+
+    towny.town.spawn.ally.bypass_public:
+        description: User is permitted to use /town spawn when they are a member of an allied nation and even if the town isn't public while is_nation_ally_spawning_requiring_public_status is true.
+        default: false
 
     towny.town.spawn.outpost:
         description: User is permitted to use /town outpost & /town outpost list
@@ -321,6 +329,7 @@ permissions:
             towny.command.nation.set.taxes: true
             towny.command.nation.set.title: true
             towny.command.nation.set.mapcolor: true
+            towny.command.nation.set.taxpercentcap: true
 
     towny.command.nation.toggle.*:
         description: User can toggle any available nation setting.
@@ -329,6 +338,7 @@ permissions:
             towny.command.nation.toggle.neutral: true
             towny.command.nation.toggle.public: true
             towny.command.nation.toggle.open: true
+            towny.command.nation.toggle.taxpercent: true
 
     # Town command permissions
     towny.command.town.*:
@@ -362,12 +372,14 @@ permissions:
             towny.command.town.reslist: true
             towny.command.town.say: true
             towny.command.town.set.*: true
+            towny.command.town.takeoverclaim: true
             towny.command.town.toggle.*: true
             towny.command.town.withdraw: true
             towny.command.town.unclaim.*: true
             towny.command.town.merge: true
             towny.command.town.unjail: true
             towny.command.town.trust: true
+            towny.command.town.trusttown: true
 
     towny.command.town.list:
         description: Users are able to use the default method of sorting the town list.
@@ -482,6 +494,10 @@ permissions:
         children:
             towny.command.town.unclaim: true
             towny.command.town.unclaim.all: true
+
+    towny.command.town.deposit.othertown:
+        description: User can deposit money into another town bank using /t deposit amount townname.
+        default: false
 
       # Plot command permissions
     towny.command.plot.*:
@@ -621,6 +637,7 @@ permissions:
             towny.command.townyadmin.tpplot: true
             towny.command.townyadmin.resident.*: true
             towny.command.townyadmin.depositall: true
+            towny.command.townyadmin.resetbanks: true
             towny.command.townyadmin.install: true
 
     towny.command.townyadmin.resident.*:
@@ -644,6 +661,7 @@ permissions:
         default: false
         children:
             towny.command.townyadmin.set.capital: true
+            towny.command.townyadmin.set.founder: true
             towny.command.townyadmin.set.mayor: true
             towny.command.townyadmin.set.nationzoneoverride: true
             towny.command.townyadmin.set.plot: true
@@ -675,6 +693,7 @@ permissions:
             towny.command.townyadmin.town.spawn.*: true
             towny.command.townyadmin.town.toggle: true
             towny.command.townyadmin.town.trust: true
+            towny.command.townyadmin.town.trusttown: true
             towny.command.townyadmin.town.unruin: true
             towny.command.townyadmin.town.withdraw: true
 
@@ -734,8 +753,6 @@ permissions:
             towny.command.towny.tree: true
             towny.command.towny.universe: true
             towny.command.towny.version: true
-            towny.command.towny.war: true
-            towny.command.towny.war.hud: true
 
     # Towny top command permissions
     towny.command.towny.top:
@@ -783,6 +800,7 @@ permissions:
             towny.command.townyworld.toggle.revertblockexpl: true
             towny.command.townyworld.toggle.townmobs: true
             towny.command.townyworld.toggle.unclaimblockdelete: true
+            towny.command.townyworld.toggle.unclaimentitydelete: true
             towny.command.townyworld.toggle.usingtowny: true
             towny.command.townyworld.toggle.warallowed: true
             towny.command.townyworld.toggle.wildernessmobs: true

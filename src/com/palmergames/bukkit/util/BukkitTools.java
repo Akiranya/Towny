@@ -5,10 +5,11 @@ import com.palmergames.bukkit.towny.Towny;
 import com.palmergames.bukkit.towny.TownySettings;
 import com.palmergames.bukkit.towny.event.CancellableTownyEvent;
 import com.palmergames.bukkit.towny.exceptions.CancelledEventException;
+import com.palmergames.bukkit.towny.hooks.PluginIntegrations;
 
-import net.citizensnpcs.api.CitizensAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.Server;
 import org.bukkit.World;
@@ -23,11 +24,13 @@ import org.bukkit.scoreboard.Criteria;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Scoreboard;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -62,7 +65,7 @@ public class BukkitTools {
 		
 		for (Player iterPlayer : Bukkit.getOnlinePlayers()) {
 			String iterPlayerName = iterPlayer.getName();
-			if (checkCitizens(iterPlayer)) {
+			if (PluginIntegrations.getInstance().checkCitizens(iterPlayer)) {
 				continue;
 			}
 			if (name.equalsIgnoreCase(iterPlayerName)) {
@@ -94,14 +97,17 @@ public class BukkitTools {
 			return null;
 	}
 	
+	@Nullable
 	public static Player getPlayerExact(String name) {
 		return getServer().getPlayerExact(name);
 	}
 	
+	@Nullable
 	public static Player getPlayer(String playerId) {
 		return getServer().getPlayer(playerId);
 	}
 	
+	@Nullable
 	public static Player getPlayer(UUID playerUUID) {
 		return server.getPlayer(playerUUID);
 	}
@@ -111,7 +117,7 @@ public class BukkitTools {
 			return Bukkit.getOnlinePlayers();
 		
 		return Bukkit.getOnlinePlayers().stream()
-			.filter(p -> player.canSee(p))
+			.filter(player::canSee)
 			.collect(Collectors.toCollection(ArrayList::new));
 	}
 	
@@ -135,6 +141,11 @@ public class BukkitTools {
 	
 	public static World getWorld(UUID worldUID) {
 		return getServer().getWorld(worldUID);
+	}
+
+	public static UUID getWorldUUID(String name) {
+		World world = getWorld(name);
+		return world != null ? world.getUID() : null;
 	}
 	
 	public static Server getServer() {
@@ -264,19 +275,13 @@ public class BukkitTools {
 	 * Catches the NoClassDefFoundError thrown when Citizens is present 
 	 * but failed to start up correctly.
 	 * 
+	 * @deprecated since 0.98.4.19 use {@link PluginIntegrations#checkCitizens(Entity)} instead.
 	 * @param entity Entity to check.
 	 * @return true if the entity is an NPC.
 	 */
+	@Deprecated
 	public static boolean checkCitizens(Entity entity) {
-		if (plugin.isCitizens2()) {
-			try {
-				return CitizensAPI.getNPCRegistry().isNPC(entity);
-			} catch (NoClassDefFoundError e) {
-				plugin.setCitizens2(false);
-			}
-			
-		}
-		return false;
+		return PluginIntegrations.getInstance().checkCitizens(entity);
 	}
 	
 	@SuppressWarnings("deprecation")
@@ -316,5 +321,17 @@ public class BukkitTools {
 
 	public static void fireEvent(@NotNull Event event) {
 		Bukkit.getPluginManager().callEvent(event);
+	}
+
+	/**
+	 * Used to parse user-inputted material names into valid material names.
+	 * 
+	 * @param name String which should be a material. 
+	 * @return String name of the material or null if no match could be made.
+	 */
+	@Nullable
+	public static String matchMaterialName(String name) {
+		Material mat = Material.matchMaterial(name.trim().toUpperCase(Locale.ROOT));
+		return mat == null ? null : mat.name(); 
 	}
 }

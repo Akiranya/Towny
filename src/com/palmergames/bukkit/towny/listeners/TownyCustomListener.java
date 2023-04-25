@@ -15,18 +15,25 @@ import com.palmergames.bukkit.towny.event.ChunkNotificationEvent;
 import com.palmergames.bukkit.towny.event.NewTownEvent;
 import com.palmergames.bukkit.towny.event.PlayerChangePlotEvent;
 import com.palmergames.bukkit.towny.event.SpawnEvent;
+import com.palmergames.bukkit.towny.event.TownAddResidentEvent;
+import com.palmergames.bukkit.towny.event.TownClaimEvent;
+import com.palmergames.bukkit.towny.event.TownRemoveResidentEvent;
 import com.palmergames.bukkit.towny.event.damage.TownyPlayerDamagePlayerEvent;
 import com.palmergames.bukkit.towny.event.nation.NationPreTownLeaveEvent;
+import com.palmergames.bukkit.towny.event.town.TownPreUnclaimCmdEvent;
 import com.palmergames.bukkit.towny.exceptions.TownyException;
 import com.palmergames.bukkit.towny.object.Resident;
+import com.palmergames.bukkit.towny.object.SpawnType;
 import com.palmergames.bukkit.towny.object.Town;
 import com.palmergames.bukkit.towny.object.TownyWorld;
 import com.palmergames.bukkit.towny.object.Translatable;
 import com.palmergames.bukkit.towny.object.Translation;
 import com.palmergames.bukkit.towny.object.WorldCoord;
 import com.palmergames.bukkit.towny.utils.BorderUtil;
+import com.palmergames.bukkit.towny.utils.SpawnUtil;
 import com.palmergames.bukkit.towny.utils.TownyComponents;
 import com.palmergames.bukkit.util.BukkitTools;
+import com.palmergames.bukkit.util.Colors;
 import com.palmergames.bukkit.util.DrawSmokeTaskFactory;
 import com.palmergames.util.TimeMgmt;
 
@@ -39,8 +46,10 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -109,7 +118,7 @@ public class TownyCustomListener implements Listener {
 	
 	private void sendChunkNoticiation(Player player, String msg) {
 		switch (TownySettings.getNotificationsAppearAs().toLowerCase(Locale.ROOT)) {
-			case "bossbar" -> sendBossBarChunkNotification(player, BossBar.bossBar(TownyComponents.miniMessage(msg), 0, BossBar.Color.WHITE, BossBar.Overlay.PROGRESS));
+			case "bossbar" -> sendBossBarChunkNotification(player, TownyComponents.miniMessage(msg));
 			case "chat" -> TownyMessaging.sendMessage(player, msg);
 			case "none" -> {}
 			default -> sendActionBarChunkNotification(player, TownyComponents.miniMessage(msg));
@@ -140,19 +149,24 @@ public class TownyCustomListener implements Listener {
 		}
 	}
 
-	private void sendBossBarChunkNotification(Player player, BossBar bossBar) {
-		int seconds = TownySettings.getInt(ConfigNodes.NOTIFICATION_DURATION) * 20;
+	private void sendBossBarChunkNotification(Player player, Component message) {
+		int ticks = TownySettings.getInt(ConfigNodes.NOTIFICATION_DURATION) * 20;
 		if (playerBossBarMap.containsKey(player)) {
 			removePlayerActionTasks(player);
 			removePlayerBossBar(player);
 		}
+		
+		final BossBar.Color color = BossBar.Color.NAMES.valueOr(TownySettings.getBossBarNotificationColor().toLowerCase(Locale.ROOT), BossBar.Color.WHITE);
+		final BossBar.Overlay overlay = BossBar.Overlay.NAMES.valueOr(TownySettings.getBossBarNotificationOverlay().toLowerCase(Locale.ROOT), BossBar.Overlay.PROGRESS);
+		
+		final BossBar bossBar = BossBar.bossBar(message, TownySettings.getBossBarNotificationProgress(), color, overlay);
 
 		TownyMessaging.sendBossBarMessageToPlayer(player, bossBar);
 
 		int taskID = Bukkit.getScheduler().runTaskLater(plugin, () -> {
 			playerActionTasks.remove(player);
 			removePlayerBossBar(player);
-		}, seconds).getTaskId();
+		}, ticks).getTaskId();
 
 		playerBossBarMap.put(player, bossBar);
 		playerActionTasks.put(player, taskID);
@@ -190,18 +204,18 @@ public class TownyCustomListener implements Listener {
 	 */
 	@EventHandler(priority = EventPriority.NORMAL) 
 	public void onBedExplodeEvent(BedExplodeEvent event) {
-		TownyWorld world = TownyAPI.getInstance().getTownyWorld(event.getLocation().getWorld().getName());
+		final TownyWorld world = Optional.ofNullable(event.getLocation().getWorld()).map(w -> TownyAPI.getInstance().getTownyWorld(w)).orElse(null);
+		if (world == null)
+			return;
+		
 		world.addBedExplosionAtBlock(event.getLocation(), event.getMaterial());
-		if (event.getLocation2() != null);
+		if (event.getLocation2() != null)
 			world.addBedExplosionAtBlock(event.getLocation2(), event.getMaterial());
-		final TownyWorld finalWorld = world;
-		Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, new Runnable() {
-            @Override
-            public void run() {
-                finalWorld.removeBedExplosionAtBlock(event.getLocation());
-                finalWorld.removeBedExplosionAtBlock(event.getLocation2());
-            }
-        }, 20L);
+		
+		Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, () -> {
+			world.removeBedExplosionAtBlock(event.getLocation());
+			world.removeBedExplosionAtBlock(event.getLocation2());
+		}, 20L);
 	}
 	
 	@EventHandler(priority = EventPriority.LOWEST) 
@@ -233,10 +247,112 @@ public class TownyCustomListener implements Listener {
 	@EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
 	public void onPlayerSpawnsWithTown(SpawnEvent event) {
 
+		if (TownyUniverse.getInstance().getPermissionSource().isTownyAdmin(event.getPlayer()))
+			return;
+
 		Town town = TownyAPI.getInstance().getTown(event.getTo());
 		if (town == null || !town.hasOutlaw(event.getPlayer().getName()))
 			return;
 		event.setCancelled(true);
 		event.setCancelMessage(Translatable.of("msg_error_cannot_town_spawn_youre_an_outlaw_in_town", town.getName()).forLocale(event.getPlayer()));
+	}
+
+	/**
+	 * Used to prevent unclaiming when there is an outsider in the TownBlock,
+	 * and the config does not allow for this.
+	 * 
+	 * @param event {@link TownPreUnclaimCmdEvent} thrown when someone runs /t unclaim.
+	 */
+	@EventHandler(ignoreCancelled = true)
+	public void onTownUnclaim(TownPreUnclaimCmdEvent event) {
+		Player player = event.getResident().getPlayer();
+		if (!TownySettings.getOutsidersUnclaimingTownBlocks() || player == null)
+			return;
+
+		List<WorldCoord> unclaimSelection = event.getUnclaimSelection();
+
+		Town town = event.getTown();
+		for (Player target : Bukkit.getOnlinePlayers()) {
+			if (!town.hasResident(target) &&
+				!TownyAPI.getInstance().isWilderness(target.getLocation()) &&
+				unclaimSelection.contains(WorldCoord.parseWorldCoord(target))) {
+				event.setCancelled(true);
+				event.setCancelMessage(Translatable.of("msg_cant_unclaim_outsider_in_town").forLocale(event.getResident()));
+				break;
+			}
+		}
+	}
+
+	/**
+	 * Used to warn towns when they're approaching their claim limit, when the
+	 * takeoverclaim feature is enabled
+	 * 
+	 * @param event TownClaimEvent.
+	 */
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onTownClaim(TownClaimEvent event) {
+		if (!TownySettings.isOverClaimingAllowingStolenLand())
+			return;
+		if (event.getTown().availableTownBlocks() <= TownySettings.getTownBlockRatio())
+			TownyMessaging.sendMsg(event.getResident(), Translatable.literal(Colors.Red).append(Translatable.of("msg_warning_you_are_almost_out_of_townblocks")));
+	}
+
+	/**
+	 * Used to warn towns when they've lost a resident, so they know they're at risk
+	 * of having claims stolen in the takeoverclaim feature.
+	 * 
+	 * @param event TownRemoveResidentEvent.
+	 */
+	@EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+	public void onTownLosesResident(TownRemoveResidentEvent event) {
+		if (!TownySettings.isOverClaimingAllowingStolenLand())
+			return;
+		if (event.getTown().getTownBlocks().size() > event.getTown().getMaxTownBlocks())
+			TownyMessaging.sendPrefixedTownMessage(event.getTown(), Translatable.literal(Colors.Red).append(Translatable.of("msg_warning_your_town_is_overclaimed")));
+	}
+
+	/**
+	 * Used to inform players they can /t takeoverclaim a plot when they enter towns that are overclaimed.
+	 * 
+	 * @param event ChunkNotificationEvent thrown by Towny to construct the chunk notifications.
+	 */
+	@EventHandler
+	public void onChunkNotification(ChunkNotificationEvent event) {
+		if (!TownySettings.isOverClaimingAllowingStolenLand() || event.getToCoord().isWilderness() || event.getFromCoord().isWilderness())
+			return;
+
+		Resident resident = TownyAPI.getInstance().getResident(event.getPlayer());
+		if (resident == null || !resident.hasTown())
+			return;
+
+		Town town = resident.getTownOrNull();
+		if  (town.availableTownBlocks() < 1 || !event.getFromCoord().getTownOrNull().equals(town))
+			return;
+
+		if (!event.getToCoord().canBeStolen())
+			return;
+
+		String message = event.getMessage() + Translatable.of("chunk_notification_takeover_available").forLocale(event.getPlayer());
+		event.setMessage(message);
+
+	}
+
+	@EventHandler (ignoreCancelled = true)
+	public void onResidentJoinTown(TownAddResidentEvent event) {
+		if (!TownySettings.isPromptingNewResidentsToTownSpawn() || !TownySettings.getBoolean(ConfigNodes.GTOWN_SETTINGS_ALLOW_TOWN_SPAWN))
+			return;
+
+		Town town = event.getTown();
+		Player player = event.getResident().getPlayer();
+
+		if (player == null || TownyAPI.getInstance().getTown(player).equals(town))
+			return;
+		String notAffordMsg = Translatable.of("msg_err_cant_afford_tp").forLocale(player);
+
+		try {
+			SpawnUtil.sendToTownySpawn(player, new String[0], town, notAffordMsg, false, false, SpawnType.TOWN);
+		} catch (TownyException e) {
+			TownyMessaging.sendErrorMsg(player, e.getMessage(player));
+		}
 	}
 }

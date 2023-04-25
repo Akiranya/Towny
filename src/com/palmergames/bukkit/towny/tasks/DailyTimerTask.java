@@ -8,7 +8,6 @@ import com.palmergames.bukkit.towny.event.NewDayEvent;
 import com.palmergames.bukkit.towny.event.PreNewDayEvent;
 import com.palmergames.bukkit.towny.event.time.dailytaxes.NewDayTaxAndUpkeepPreCollectionEvent;
 import com.palmergames.bukkit.towny.event.time.dailytaxes.PreTownPaysNationTaxEvent;
-import com.palmergames.bukkit.towny.event.town.TownUnconquerEvent;
 import com.palmergames.bukkit.towny.object.Nation;
 import com.palmergames.bukkit.towny.object.Resident;
 import com.palmergames.bukkit.towny.object.Town;
@@ -76,8 +75,7 @@ public class DailyTimerTask extends TownyTimerTask {
 		 * If enabled, remove old residents who haven't logged in for the configured number of days.
 		 */	
 		if (TownySettings.isDeletingOldResidents()) {
-			// Run a purge in it's own thread
-			new ResidentPurge(plugin, null, TownySettings.getDeleteTime() * 1000, TownySettings.isDeleteTownlessOnly(), null).start();
+			Bukkit.getScheduler().runTaskAsynchronously(plugin, new ResidentPurge(null, TownySettings.getDeleteTime() * 1000, TownySettings.isDeleteTownlessOnly(), null));
 		}
 		
 		//Clean up unused NPC residents
@@ -142,9 +140,6 @@ public class DailyTimerTask extends TownyTimerTask {
 	}
 
 	private void unconquer(Town town) {
-		if (BukkitTools.isEventCancelled(new TownUnconquerEvent(town)))
-			return;
-		
 		town.setConquered(false);
 		town.setConqueredDays(0);
 	}
@@ -177,7 +172,7 @@ public class DailyTimerTask extends TownyTimerTask {
 		
 		if (nation.getTaxes() > 0) {
 
-			double taxAmount = nation.getTaxes();
+			double taxAmount;
 			List<String> localNewlyDelinquentTowns = new ArrayList<>();
 			List<String> localTownsDestroyed = new ArrayList<>();
 			List<Town> towns = new ArrayList<>(nation.getTowns());
@@ -195,13 +190,28 @@ public class DailyTimerTask extends TownyTimerTask {
 				if (universe.hasTown(town.getName())) {
 					if ((town.isCapital() && !TownySettings.doCapitalsPayNationTax()) || !town.hasUpkeep() || town.isRuined())
 						continue;
-					
+					taxAmount = nation.getTaxes();
+
+					if (nation.isTaxPercentage()) {
+						taxAmount = town.getAccount().getHoldingBalance() * taxAmount / 100;
+						taxAmount = Math.min(taxAmount, nation.getMaxPercentTaxAmount());
+					}
+
 					PreTownPaysNationTaxEvent event = new PreTownPaysNationTaxEvent(town, nation, taxAmount);
 					if (BukkitTools.isEventCancelled(event)) {
 						TownyMessaging.sendPrefixedTownMessage(town, event.getCancelMessage());
 						continue;
 					}
 					taxAmount = event.getTax();
+					
+					// Handle if the bank cannot be paid because of the cap. It might be more than
+					// the bank can accept, so we reduce it to the amount that the bank can accept,
+					// even if it becomes 0.
+					if (nation.getBankCap() != 0 && taxAmount + nation.getAccount().getHoldingBalance() > nation.getBankCap())
+						taxAmount = nation.getBankCap() - nation.getAccount().getHoldingBalance();
+					
+					if (taxAmount <= 0)
+						continue;
 					
 					if (town.getAccount().canPayFromHoldings(taxAmount)) {
 					// Town is able to pay the nation's tax.
@@ -341,16 +351,25 @@ public class DailyTimerTask extends TownyTimerTask {
 						// they will be able to pay but it might be more than the bank can accept,
 						// so we reduce it to the amount that the bank can accept, even if it
 						// becomes 0.
-						if (TownySettings.getTownBankCap() != 0 && tax + town.getAccount().getHoldingBalance() > TownySettings.getTownBankCap())
-							tax = town.getAccount().getBalanceCap() - town.getAccount().getHoldingBalance();
+						if (town.getBankCap() != 0 && tax + town.getAccount().getHoldingBalance() > town.getBankCap())
+							tax = town.getBankCap() - town.getAccount().getHoldingBalance();
+						
+						if (tax == 0)
+							continue;
 						
 						resident.getAccount().payTo(tax, town, "Town Tax (Percentage)");
 					} else {
 						// Check if the bank could take the money, reduce it to 0 if required so that 
 						// players do not get kicked in a situation they could be paying but cannot because
 						// of the bank cap.
-						if (TownySettings.getTownBankCap() != 0 && tax + town.getAccount().getHoldingBalance() > TownySettings.getTownBankCap())
-							tax = town.getAccount().getBalanceCap() - town.getAccount().getHoldingBalance();
+						if (town.getBankCap() != 0 && tax + town.getAccount().getHoldingBalance() > town.getBankCap())
+							tax = town.getBankCap() - town.getAccount().getHoldingBalance();
+						
+						
+						
+						
+						if (tax == 0)
+							continue;
 						
 						if (resident.getAccount().canPayFromHoldings(tax))
 							resident.getAccount().payTo(tax, town, "Town tax (FlatRate)");
@@ -405,8 +424,11 @@ public class DailyTimerTask extends TownyTimerTask {
 
 				// If the tax would put the town over the bank cap we reduce what will be
 				// paid by the plot owner to what will be allowed.
-				if (TownySettings.getTownBankCap() != 0 && tax + town.getAccount().getHoldingBalance() > TownySettings.getTownBankCap())
-					tax = town.getAccount().getBalanceCap() - town.getAccount().getHoldingBalance();
+				if (town.getBankCap() != 0 && tax + town.getAccount().getHoldingBalance() > town.getBankCap())
+					tax = town.getBankCap() - town.getAccount().getHoldingBalance();
+
+				if (tax == 0)
+					continue;
 
 				if (!resident.getAccount().payTo(tax, town, String.format("Plot Tax (%s)", townBlock.getType()))) {
 					if (!lostPlots.contains(resident.getName()))
@@ -443,7 +465,6 @@ public class DailyTimerTask extends TownyTimerTask {
 		List<Town> towns = new ArrayList<>(universe.getTowns());
 		ListIterator<Town> townItr = towns.listIterator();
 		Town town;
-		double neutralityCost = TownySettings.getTownNeutralityCost();
 
 		while (townItr.hasNext()) {
 			town = townItr.next();
@@ -539,14 +560,18 @@ public class DailyTimerTask extends TownyTimerTask {
 				}
 				
 				// Charge towns for keeping a peaceful status.
-				if (neutralityCost > 0 && town.isNeutral()) {
-					if ((town.isBankrupt() && !TownySettings.canBankruptTownsPayForNeutrality())
-						|| !town.getAccount().withdraw(neutralityCost, "Town Peace Upkeep")) {
-						town.setNeutral(false);
-						town.save();
-						TownyMessaging.sendPrefixedTownMessage(town, Translatable.of("msg_town_not_peaceful"));
-					} else {
-						TownyMessaging.sendPrefixedTownMessage(town, Translatable.of("msg_town_paid_for_neutral_status", TownyEconomyHandler.getFormattedBalance(neutralityCost)));
+				if (town.isNeutral()) {
+					double neutralityCost = TownySettings.getTownNeutralityCost(town);
+					if (neutralityCost > 0) {
+						if ((town.isBankrupt() && !TownySettings.canBankruptTownsPayForNeutrality())
+							|| !town.getAccount().withdraw(neutralityCost, "Town Peace Upkeep")) {
+								town.setNeutral(false);
+								town.save();
+								TownyMessaging.sendPrefixedTownMessage(town, Translatable.of("msg_town_not_peaceful"));
+							} else {
+								TownyMessaging.sendPrefixedTownMessage(town, Translatable.of("msg_town_paid_for_neutral_status", TownyEconomyHandler.getFormattedBalance(neutralityCost)));
+							}
+						
 					}
 				}
 			}			
@@ -579,7 +604,6 @@ public class DailyTimerTask extends TownyTimerTask {
 		List<Nation> nations = new ArrayList<>(universe.getNations());
 		ListIterator<Nation> nationItr = nations.listIterator();
 		Nation nation;
-		double neutralityCost = TownySettings.getNationNeutralityCost();
 
 		while (nationItr.hasNext()) {
 			nation = nationItr.next();
@@ -610,13 +634,16 @@ public class DailyTimerTask extends TownyTimerTask {
 				}
 
 				// Charge nations for keeping a peaceful status.
-				if (neutralityCost > 0 && nation.isNeutral()) {
-					if (!nation.getAccount().withdraw(neutralityCost, "Nation Peace Upkeep")) {
-						nation.setNeutral(false);
-						nation.save();
-						TownyMessaging.sendPrefixedNationMessage(nation, Translatable.of("msg_nation_not_peaceful"));
-					} else {
-						TownyMessaging.sendPrefixedNationMessage(nation, Translatable.of("msg_nation_paid_for_neutral_status", TownyEconomyHandler.getFormattedBalance(neutralityCost)));
+				if (nation.isNeutral()) {
+					double neutralityCost = TownySettings.getNationNeutralityCost(nation);
+					if (neutralityCost > 0) {
+						if (!nation.getAccount().withdraw(neutralityCost, "Nation Peace Upkeep")) {
+							nation.setNeutral(false);
+							nation.save();
+							TownyMessaging.sendPrefixedNationMessage(nation, Translatable.of("msg_nation_not_peaceful"));
+						} else {
+							TownyMessaging.sendPrefixedNationMessage(nation, Translatable.of("msg_nation_paid_for_neutral_status", TownyEconomyHandler.getFormattedBalance(neutralityCost)));
+						}
 					}
 				}
 			}

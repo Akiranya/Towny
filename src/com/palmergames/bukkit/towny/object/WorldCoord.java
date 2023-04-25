@@ -2,9 +2,9 @@ package com.palmergames.bukkit.towny.object;
 
 import com.palmergames.bukkit.towny.Towny;
 import com.palmergames.bukkit.towny.TownyAPI;
+import com.palmergames.bukkit.towny.TownySettings;
 import com.palmergames.bukkit.towny.TownyUniverse;
 import com.palmergames.bukkit.towny.exceptions.NotRegisteredException;
-import com.palmergames.bukkit.util.BukkitTools;
 
 import io.papermc.lib.PaperLib;
 
@@ -15,9 +15,12 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.util.BoundingBox;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -30,35 +33,52 @@ import java.util.concurrent.CompletableFuture;
 
 public class WorldCoord extends Coord {
 
-	private final World world;
+	private final String worldName;
+	private UUID worldUUID;
+	private Reference<World> worldRef = new WeakReference<>(null);
 
 	public WorldCoord(String worldName, int x, int z) {
 		super(x, z);
-		this.world = BukkitTools.getWorld(worldName);
+		this.worldName = worldName;
+		
+		World world = Bukkit.getServer().getWorld(worldName);
+		if (world != null)
+			this.worldUUID = world.getUID();
 	}
 
 	public WorldCoord(String worldName, Coord coord) {
-		super(coord);
-		this.world = BukkitTools.getWorld(worldName);
+		this(worldName, coord.getX(), coord.getZ());
 	}
 
-	public WorldCoord(UUID worldUID, int x, int z) {
+	public WorldCoord(String worldName, UUID worldUUID, int x, int z) {
 		super(x, z);
-		this.world = BukkitTools.getWorld(worldUID);
+		this.worldName = worldName;
+		this.worldUUID = worldUUID;
 	}
 
-	public WorldCoord(UUID worldUID, Coord coord) {
-		super(coord);
-		this.world = BukkitTools.getWorld(worldUID);
+	public WorldCoord(String worldName, UUID worldUUID, Coord coord) {
+		this(worldName, worldUUID, coord.getX(), coord.getZ());
+	}
+
+	public WorldCoord(@NotNull World world, int x, int z) {
+		super(x, z);
+		this.worldName = world.getName();
+		this.worldUUID = world.getUID();
+	}
+
+	public WorldCoord(@NotNull World world, Coord coord) {
+		this(world, coord.getX(), coord.getZ());
 	}
 
 	public WorldCoord(WorldCoord worldCoord) {
 		super(worldCoord);
-		this.world = worldCoord.getBukkitWorld();
+		this.worldName = worldCoord.getWorldName();
+		this.worldUUID = worldCoord.worldUUID;
+		this.worldRef = new WeakReference<>(worldCoord.worldRef.get());
 	}
 
 	public String getWorldName() {
-		return world.getName();
+		return this.worldName;
 	}
 
 	public Coord getCoord() {
@@ -74,23 +94,22 @@ public class WorldCoord extends Coord {
 	}
 	
 	public static WorldCoord parseWorldCoord(Location loc) {
-		return parseWorldCoord(loc.getWorld().getName(), loc.getBlockX(), loc.getBlockZ());
+		return new WorldCoord(loc.getWorld(), toCell(loc.getBlockX()), toCell(loc.getBlockZ()));
 	}
 
 	public static WorldCoord parseWorldCoord(Block block) {
-		return parseWorldCoord(block.getWorld().getName(), block.getX(), block.getZ());
+		return parseWorldCoord(block.getLocation());
 	}
 
 	public WorldCoord add(int xOffset, int zOffset) {
-
-		return new WorldCoord(getWorldName(), getX() + xOffset, getZ() + zOffset);
+		return new WorldCoord(getWorldName(), worldUUID, getX() + xOffset, getZ() + zOffset);
 	}
 
 	@Override
 	public int hashCode() {
 
 		int hash = 17;
-		hash = hash * 27 + (getWorldName() == null ? 0 : getWorldName().hashCode());
+		hash = hash * 27 + this.worldName.hashCode();
 		hash = hash * 27 + getX();
 		hash = hash * 27 + getZ();
 		return hash;
@@ -120,9 +139,16 @@ public class WorldCoord extends Coord {
 	/**
 	 * Shortcut for Bukkit.getWorld(worldName)
 	 * 
-	 * @return the relevant org.bukkit.World instance
+	 * @return the relevant {@link World} instance
 	 */
+	@Nullable
 	public World getBukkitWorld() {
+		World world = worldRef.get();
+		if (world == null) {
+			world = Bukkit.getServer().getWorld(this.worldName);
+			worldRef = new WeakReference<>(world);
+		}
+		
 		return world;
 	}
 
@@ -131,12 +157,16 @@ public class WorldCoord extends Coord {
 	 */
 	@Nullable
 	public TownyWorld getTownyWorld() {
-		return TownyUniverse.getInstance().getWorld(getWorldName()); 
+		return TownyAPI.getInstance().getTownyWorld(this.worldName);
 	}
 
+	/**
+	 * @deprecated as of 0.98.4.9, please use {@link #getTownyWorld()} instead.
+	 */
 	@Nullable
+	@Deprecated
 	public TownyWorld getTownyWorldOrNull() {
-		return TownyAPI.getInstance().getTownyWorld(world);
+		return TownyAPI.getInstance().getTownyWorld(this.worldName);
 	}
 	
 	/**
@@ -226,9 +256,9 @@ public class WorldCoord extends Coord {
 			// Dealing with a townblocksize greater than 16, we will have multiple chunks per WorldCoord.
 			final Set<CompletableFuture<Chunk>> chunkFutures = new HashSet<>();
 			
-			int side = Math.round(getCellSize() / 16f);
-			for (int x = 0; x <= side; x++) {
-				for (int z = 0; z <= side; z++) {
+			int side = (int) Math.ceil(getCellSize() / 16f);
+			for (int x = 0; x < side; x++) {
+				for (int z = 0; z < side; z++) {
 					chunkFutures.add(PaperLib.getChunkAtAsync(getSubCorner(x, z)));
 				}
 			}
@@ -295,12 +325,23 @@ public class WorldCoord extends Coord {
 			   !Objects.equals(from.getWorld(), to.getWorld());
 	}
 
-	public List<WorldCoord> getCardinallyAdjacentWorldCoords() {
-		List<WorldCoord> list = new ArrayList<>(4);
+	public List<WorldCoord> getCardinallyAdjacentWorldCoords(boolean... includeOrdinalFlag) {
+		boolean includeOrdinal = (includeOrdinalFlag.length >= 1) ? includeOrdinalFlag[0] : false;
+		List<WorldCoord> list =new ArrayList<>(includeOrdinal ? 8 : 4);
 		list.add(this.add(0,-1));
 		list.add(this.add(0,1));
 		list.add(this.add(1,0));
 		list.add(this.add(-1,0));
+		if (includeOrdinal) {
+			list.add(this.add(1,1));
+			list.add(this.add(1,-1));
+			list.add(this.add(-1,-1));
+			list.add(this.add(-1,1));
+		}
 		return list;
+	}
+
+	public boolean canBeStolen() {
+		return TownySettings.isOverClaimingAllowingStolenLand() && hasTownBlock() && getTownOrNull().isOverClaimed();
 	}
 }

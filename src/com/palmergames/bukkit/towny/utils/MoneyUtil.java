@@ -1,6 +1,9 @@
 package com.palmergames.bukkit.towny.utils;
 
 import com.palmergames.bukkit.towny.object.Translatable;
+
+import java.io.File;
+
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -11,10 +14,10 @@ import com.palmergames.bukkit.towny.TownyEconomyHandler;
 import com.palmergames.bukkit.towny.TownyMessaging;
 import com.palmergames.bukkit.towny.TownySettings;
 import com.palmergames.bukkit.towny.TownyUniverse;
-import com.palmergames.bukkit.towny.event.NationPreTransactionEvent;
-import com.palmergames.bukkit.towny.event.NationTransactionEvent;
-import com.palmergames.bukkit.towny.event.TownPreTransactionEvent;
-import com.palmergames.bukkit.towny.event.TownTransactionEvent;
+import com.palmergames.bukkit.towny.event.economy.NationPreTransactionEvent;
+import com.palmergames.bukkit.towny.event.economy.NationTransactionEvent;
+import com.palmergames.bukkit.towny.event.economy.TownPreTransactionEvent;
+import com.palmergames.bukkit.towny.event.economy.TownTransactionEvent;
 import com.palmergames.bukkit.towny.exceptions.TownyException;
 import com.palmergames.bukkit.towny.object.Nation;
 import com.palmergames.bukkit.towny.object.Resident;
@@ -78,7 +81,7 @@ public class MoneyUtil {
 			} else {
 				// Deposit into town from a nation member.
 				resident.getAccount().payTo(amount, town, "Town Deposit from Nation member");
-				TownyMessaging.sendPrefixedNationMessage(nation, Translatable.of("msg_xx_deposited_xx", resident.getName(), amount, town + " " + Translatable.of("town_sing")));
+				TownyMessaging.sendPrefixedNationMessage(nation, Translatable.of("msg_xx_deposited_xx", resident.getName(), amount, Translatable.literal(town.getName() + " ").append(Translatable.of("town_sing"))));
 			}
 			
 			BukkitTools.fireEvent(new TownTransactionEvent(town, transaction));
@@ -141,7 +144,8 @@ public class MoneyUtil {
 	 * @throws TownyException thrown if any of the tests are failed.
 	 */
 	private static void commonTests(int amount, Resident resident, Town town, Location loc, boolean nation, boolean withdraw) throws TownyException {
-		
+		Nation townNation = nation ? town.getNationOrNull() : null; 
+
 		if (!TownyEconomyHandler.isActive())
 			throw new TownyException(Translatable.of("msg_err_no_economy"));
 		
@@ -157,15 +161,15 @@ public class MoneyUtil {
 		if (withdraw && ((nation && !TownySettings.getNationBankAllowWithdrawls()) || (!nation && !TownySettings.getTownBankAllowWithdrawls())))
 			throw new TownyException(Translatable.of("msg_err_withdraw_disabled"));
 		
-		if (!withdraw && (TownySettings.getTownBankCap() > 0 || TownySettings.getNationBankCap() > 0)) {
+		if (!withdraw && ((!nation && TownySettings.getTownBankCap(town) > 0) || (nation && TownySettings.getNationBankCap(townNation) > 0))) {
 			double bankcap = 0;
 			double balance = 0;
-			if (!nation && TownySettings.getTownBankCap() > 0) {
-				bankcap = TownySettings.getTownBankCap();
+			if (!nation && town.getBankCap() > 0) {
+				bankcap = town.getBankCap();
 				balance = town.getAccount().getHoldingBalance();
-			} else if (nation && TownySettings.getNationBankCap() > 0) {
-				bankcap = TownySettings.getNationBankCap();
-				balance = town.getNation().getAccount().getHoldingBalance();
+			} else if (nation && townNation.getBankCap() > 0) {
+				bankcap = townNation.getBankCap();
+				balance = townNation.getAccount().getHoldingBalance();
 			}
 			if (bankcap > 0 && amount + balance > bankcap)
 				throw new TownyException(Translatable.of("msg_err_deposit_capped", bankcap));
@@ -207,9 +211,20 @@ public class MoneyUtil {
 	}
 	
 	/**
+	 * For a short time Towny stored debt accounts in the server's economy plugin.
+	 * This practice had to end, being replaced with the debtBalance which is stored
+	 * in the Town object.
+	 */
+	public static void checkLegacyDebtAccounts() {
+		File f = new File(TownyUniverse.getInstance().getRootFolder(), "debtAccountsConverted.txt");
+		if (!f.exists())
+			Bukkit.getScheduler().runTaskLaterAsynchronously(Towny.getPlugin(), () -> convertLegacyDebtAccounts(), 600l);
+	}
+	
+	/**
 	 * Will attempt to set a town's debtBalance if their old DebtAccount is above 0 and exists.
 	 */
-	public static void convertLegacyDebtAccounts() {
+	private static void convertLegacyDebtAccounts() {
 		for (Town town : TownyUniverse.getInstance().getTowns()) {
 			final String name = "[DEBT]-" + town.getName();
 			if (TownyEconomyHandler.hasAccount(name)) {

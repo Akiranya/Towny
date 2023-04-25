@@ -6,6 +6,7 @@ import com.palmergames.bukkit.towny.TownyCommandAddonAPI;
 import com.palmergames.bukkit.towny.TownyFormatter;
 import com.palmergames.bukkit.towny.TownyMessaging;
 import com.palmergames.bukkit.towny.TownyUniverse;
+import com.palmergames.bukkit.towny.confirmations.Confirmation;
 import com.palmergames.bukkit.towny.TownyCommandAddonAPI.CommandType;
 import com.palmergames.bukkit.towny.event.TownBlockSettingsChangedEvent;
 import com.palmergames.bukkit.towny.exceptions.TownyException;
@@ -18,7 +19,6 @@ import com.palmergames.bukkit.util.BukkitTools;
 import com.palmergames.bukkit.util.ChatTools;
 import com.palmergames.bukkit.util.Colors;
 import com.palmergames.util.StringMgmt;
-import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -67,6 +67,7 @@ public class TownyWorldCommand extends BaseCommand implements CommandExecutor {
 		"revertblockexpl",
 		"warallowed",
 		"unclaimblockdelete",
+		"unclaimentitydelete",
 		"plotcleardelete",
 		"wildernessuse"
 	);
@@ -348,6 +349,12 @@ public class TownyWorldCommand extends BaseCommand implements CommandExecutor {
 				globalWorld.setUsingPlotManagementDelete(choice.orElse(!globalWorld.isUsingPlotManagementDelete()));
 				TownyMessaging.sendMsg(sender, Translatable.of("msg_changed_world_setting", "Unclaim Block Delete", globalWorld.getName(), formatBool(globalWorld.isUsingPlotManagementDelete())));
 
+			} else if (split[0].equalsIgnoreCase("unclaimentitydelete")) {
+
+				checkPermOrThrow(sender, PermissionNodes.TOWNY_COMMAND_TOWNYWORLD_TOGGLE_UNCLAIMENTITYDELETE.getNode());
+				globalWorld.setDeletingEntitiesOnUnclaim(choice.orElse(!globalWorld.isDeletingEntitiesOnUnclaim()));
+				TownyMessaging.sendMsg(sender, Translatable.of("msg_changed_world_setting", "Unclaim Entity Delete", globalWorld.getName(), formatBool(globalWorld.isDeletingEntitiesOnUnclaim())));
+
 			} else if (split[0].equalsIgnoreCase("wildernessuse")) {
 
 				checkPermOrThrow(sender, PermissionNodes.TOWNY_COMMAND_TOWNYWORLD_TOGGLE_WILDERNESSUSE.getNode());
@@ -384,9 +391,13 @@ public class TownyWorldCommand extends BaseCommand implements CommandExecutor {
 
 			if (split[0].equalsIgnoreCase("usedefault")) {
 
-				globalWorld.setUsingDefault();
-				plugin.resetCache();
-				TownyMessaging.sendMsg(sender, Translatable.of("msg_usedefault", globalWorld.getName()));
+				Confirmation.runOnAccept(() -> {
+					globalWorld.setUsingDefault();
+					plugin.resetCache();
+					TownyMessaging.sendMsg(sender, Translatable.of("msg_usedefault", globalWorld.getName()));
+				})
+				.setTitle(Translatable.of("confirmation_are_you_sure_you_want_to_reset_this_worlds_settings"))
+				.sendTo(sender);
 
 			} else if (split[0].equalsIgnoreCase("wildperm")) {
 
@@ -411,20 +422,22 @@ public class TownyWorldCommand extends BaseCommand implements CommandExecutor {
 			} else if (split[0].equalsIgnoreCase("wildignore")) {
 
 				if (split.length < 2)
-					TownyMessaging.sendErrorMsg(sender, "Eg: /townyworld set wildignore SAPLING,GOLD_ORE,IRON_ORE <world>");
+					TownyMessaging.sendErrorMsg(sender, Translatable.of("msg_err_invalid_input", "/townyworld set wildignore OAK_SAPLING GOLD_ORE IRON_ORE"));
 				else
 					try {
 						List<String> mats = new ArrayList<>();
-						for (String s : StringMgmt.remFirstArg(split))
-							mats.add(Material.matchMaterial(s.trim().toUpperCase(Locale.ROOT)).name());
-
+						for (String s : StringMgmt.remFirstArg(split)) {
+							String matName = BukkitTools.matchMaterialName(s);
+							if (matName != null)
+								mats.add(matName);
+						}
 						globalWorld.setUnclaimedZoneIgnore(mats);
 
 						plugin.resetCache();
 						TownyMessaging.sendMsg(sender, Translatable.of("msg_set_wild_ignore", globalWorld.getName(), globalWorld.getUnclaimedZoneIgnoreMaterials()));
 
 					} catch (Exception e) {
-						TownyMessaging.sendErrorMsg(sender, Translatable.of("msg_err_invalid_input", " on/off."));
+						TownyMessaging.sendErrorMsg(sender, Translatable.of("msg_err_invalid_input", "/townyworld set wildignore OAK_SAPLING GOLD_ORE IRON_ORE"));
 					}
 
 			} else if (split[0].equalsIgnoreCase("wildregen")) {
@@ -445,9 +458,10 @@ public class TownyWorldCommand extends BaseCommand implements CommandExecutor {
 
 				if (split.length < 2) {
 					TownyMessaging.sendErrorMsg(sender, "Eg: /townyworld set wildname Wildy");
-				} else
+				} else {
 					globalWorld.setUnclaimedZoneName(split[1]);
 					TownyMessaging.sendMsg(sender, Translatable.of("msg_set_wild_name", globalWorld.getName(), split[1]));
+				}
 			} else if (TownyCommandAddonAPI.hasCommand(CommandType.TOWNYWORLD_SET, split[0])) {
 				try {
 					TownyCommandAddonAPI.getAddonCommand(CommandType.TOWNYWORLD_SET, split[0]).execute(sender, "townyworld", split);

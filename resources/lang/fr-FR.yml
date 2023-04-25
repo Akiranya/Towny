@@ -4,16 +4,33 @@ language: french
 author: Noiknez,TheCalypso,Cidalex,Mitsu,ARNPIK,Dzious,PainOchoco
 website: 'http://townyadvanced.github.io/'
 description: >
-  Language file for all game messages.  Do not alter this file. If you wish to change any of the entries, make a copy named something else. Alternate language files can be enabled by altering the [language] entry in config.yml
+  Language file for all game messages for this Locale.
+#A note on editing this file.
+#----------------------------
+#Do not alter this file if it is in the reference folder.
+#Before you edit this file, read about how Towny handles
+#language files:
+#https://github.com/TownyAdvanced/Towny/wiki/How-Towny-Works#multi-language.
+#A note on text formatting (how Towny status_title_pvpinserts words.)
+#----------------------------------------------------
 #You MUST retain spacing in the texts.
-#If a text begins or ends with a space, it must remain that way.
+#If a text begins or ends with a space, it must remain that
+#way.
 #%s = data to be supplied by the plugin.
-#Text colouring
-#--------------
+#If you find that a line has multiple %s variables which would
+#be in a different order in your language, you can change them
+#to %1$s, %2$s, %4$s, %3$s to change their order. ie: %4$s
+#will always use the 4th variable, no matter where it is
+#placed on the line.
+#A note on text colouring and formatting.
+#----------------------------------------
 #Black = &0, Navy = &1, Green = &2, Blue = &3, Red = &4
 #Purple = &5, Gold = &6, LightGray = &7, Gray = &8
 #DarkPurple = &9, LightGreen = &a, LightBlue = &b
 #Rose = &c, LightPurple = &d, Yellow = &e, White = &f
+#This language file also supports using MiniMessage for colours
+#and formatting. Learn about MiniMessage formatting here:
+#https://docs.adventure.kyori.net/minimessage/format.html
 default_towny_prefix: '&6[Towny] &b'
 default_town_prefix: '&6[%s] &b'
 default_nation_prefix: '&6[%s] &6'
@@ -130,7 +147,7 @@ msg_you_left: '&bVous avez quitté %s.'
 msg_not_mayor: '&bVous n''êtes pas le maire de la ville.'
 msg_not_king: '&bVous n''êtes pas le dirigeant de la nation.'
 msg_not_mayor_ass: '&bVous n''êtes pas le maire ni un assistant de la ville.'
-msg_not_king_ass: '&bVous n''êtes pas le dirigeant de la nation ou un assistant.'
+msg_not_king_ass: '&bVous n''êtes ni le dirigeant de la nation ni un assistant.'
 msg_own_nation_disallow: '&bVous ne pouvez pas faire ceci à votre propre nation.'
 msg_no_perms_claim: '&bVous n''avez pas la permission d''étendre votre ville.'
 msg_outpost_disable: '&bLes avant-postes ne sont pas disponibles.'
@@ -178,7 +195,6 @@ msg_no_funds_to_buy: '&cLa ville ne peut pas se permettre d''acheter %s %s coût
 msg_annexed_area: '&2Zone annexée %s'
 msg_max_plot_own: '&cVous ne pouvez pas posséder plus de %s parcelles.'
 msg_max_outposts_own: '&cVous ne pouvez pas posséder plus de %s avant-postes.'
-msg_wait_locked: '&2Merci de patienter, les parcelles seront bientôt disponibles.'
 msg_no_funds_new_nation: '&cLa ville n’a pas les moyens de créer une nouvelle nation.'
 msg_already_claimed: '&cCette zone a déjà été annexé par: %s'
 msg_already_claimed_1: '&cCette zone (%s) appartient déjà à quelqu''un.'
@@ -243,7 +259,9 @@ msg_set_wild_regen: '&bRégénération de la nature de %s changé avec succès �
 msg_set_use_towny_on: '&bCe monde est maintenant géré par les règles de Towny.'
 msg_set_use_towny_off: '&cCe monde est exempté de toutes les interactions de Towny.'
 msg_error_must_be_int: '&bLe montant doit être un nombre entier.'
+msg_error_input_must_be_int: '&c%s doit être un nombre entier'
 msg_error_must_be_num: '&bLe montant doit être un nombre.'
+msg_error_input_must_be_num: '&c%s doit être un nombre'
 msg_must_specify_amnt: '&bVous devez préciser le montant. Ex: %s 54'
 msg_town_set_tax: '&b%s a fixé les impôts résidentiels quotidiens à %s'
 msg_town_set_plottax: '&b%s a fixé les impôts quotidiens des parcelles à %s'
@@ -273,7 +291,6 @@ msg_plot_set_type: '&bType de la parcelle fixé à %s'
 msg_cache_block_error: '&cVous n''avez pas été enregistré avec Towny. Essayez de vous reconnecter.'
 msg_cache_block_error_wild: '&cPas autorisé à %s dans la nature.'
 msg_cache_block_error_plot: '&cLe propriétaire ne permet pas aux %s de %s ici.'
-msg_cache_block_error_locked: '&cCette parcelle est bloquée !'
 msg_cache_block_error_town_resident: '&cLes résidents ne sont pas autorisés à %s ici.'
 msg_cache_block_error_town_allies: '&cLes alliés ne sont pas autorisés à %s.'
 msg_cache_block_error_town_outsider: '&cLes étrangers ne sont pas autorisés à %s.'
@@ -438,6 +455,7 @@ invite_plu: 'Invitations'
 invite_sent_by: 'Invitation envoyée par'
 invite_help_1: 'Accepter une invitation à rejoindre une ville'
 invite_help_2: 'Décliner une invitation pour rejoindre une ville'
+invite_help_4: 'Decline all invites to join a town'
 invite_help_3: 'Liste de toutes vos invitations'
 town_invite_help_1: 'Inviter un joueur dans votre ville'
 town_invite_help_2: 'Annuler une invitation qui a été envoyée à un joueur'
@@ -455,6 +473,7 @@ nation_ally_help_4: 'Liste de toutes les demandes d''allié que vous avez reçue
 nation_ally_help_5: 'Accepter une demande d''allier d''une nation'
 nation_ally_help_6: 'Rejeter une demande d''allier d''une nation'
 nation_ally_help_7: 'Annuler une demande d''allié'
+msg_player_denied_all_invites: "All of your received invites have been denied."
 msg_err_player_no_invites: '&cVous n''avez aucune invitation !'
 msg_err_player_has_multiple_invites: '&cVous avez plusieurs invitations, veuillez préciser !'
 msg_err_player_has_too_many_invites: '%s a trop d''invitations, demandez-leur d''en refuser, avant d''inviter à nouveau.'
@@ -567,10 +586,12 @@ jailed_in_town: ' dans la ville : %s'
 status_friends: 'Amis'
 rank_list_title: 'Liste de rang %s'
 rank_list_mayor: 'Maire :'
+status_title_capital: '&b(Capital)'
 status_title_pvp: ' &4(PvP)'
 status_title_open: ' &b(Ouvert)'
 status_town_board: 'Description:'
 status_founded: 'Fondée le :'
+status_founded_by: 'Fondateur:'
 status_town_size: 'Taille de la ville :'
 status_town_size_bought: 'Acheté:'
 status_town_size_bonus: 'Bonus:'
@@ -585,6 +606,7 @@ status_nation_tax: 'Taxe nationale:'
 status_nation_towns: 'Villes'
 status_nation_allies: 'Alliés'
 status_nation_enemies: 'Ennemis'
+status_nation_enemied_by: 'Nations that consider your nation an enemy'
 status_world_claimable: '&aAnnexable'
 status_world_noclaims: '&cNon annexable'
 status_world_forcepvp: 'PvP autorisé:'
@@ -715,6 +737,7 @@ msg_error_ta_plot_claim: 'nom de joueur manquant, ex: /ta plot claim NomDuJoueur
 msg_error_no_player_with_that_name: 'Aucun joueur trouvé avec le nom %s'
 msg_admin_has_given_you_a_plot: 'Un admin a revendiqué une parcelle pour vous à %s'
 msg_town_forcepvp_setting_set_to: 'La ville %s a l''option de pvp forcé en mode %s'
+msg_town_forcedisabledpvp_setting_set_to: 'La ville %s a l''option admindisabledpvp forcé à %s'
 msg_nation_changed_open: '&cL''accès à la nation est maintenant %s.'
 msg_err_already_in_a_nation: 'Votre ville est déjà dans une nation.'
 msg_err_nation_not_open: '&cLa nation %s n''a pas ses portes ouvertes à tout le monde. Demandez au dirigeant de la nation ou à un assistant de rejoindre.'
@@ -1407,7 +1430,7 @@ tc_player_channel_sound_unmuted: 'Le son du canal a été rétabli'
 #Added in 0.135
 msg_cant_toggle_pvp_outsider_in_plot: 'Il y a un étranger dans votre parcelle, vous ne pouvez pas changer le statut de pvp!'
 #Added in 0.136
-msg_view_on_web: '&7Click to view on the web.'
+msg_view_on_web: '&7Cliquez pour voir sur le web.'
 #Added in 0.137
 #Shown globally when a town merges with another town.
 town1_has_merged_with_town2: '&6La ville %s a accepté de fusionner avec la ville régnante de %s.'
@@ -1477,6 +1500,10 @@ msg_err_could_not_find_any_towns_to_rtp: 'Pas de villes ouvertes et publiques av
 msg_cost_spawn_rtp: '&bVous avez été chargé %s pour vous téléporter aléatoirement à une parcelle de ville en vente.'
 #Message shown to a player when they use the town rtp command.
 msg_you_are_about_to_be_teleported_to_a_plot: 'Vous êtes sur le point d''être téléporté à une parcelle qui est en vente dans %s qui vous laissera rejoindre. Utilisez ''/plot claim'' pour annexer votre parcelle quand vous arrivez.'
+#Shown in TownyRTP when a player joins a town and is prompted to be TPd to some land to buy.
+townyrtp.the_town_has_plots_to_buy_would_you_like_to_tp: "The town of %s has plots which you can purchase, did you want to be teleported to a plot you can purchase right now?"
+#Shown when you arrive at your destination after opting in to be teleported to a plot to buy.
+townyrtp.you_have_arrived: "You have been teleported to a plot you can purchase. Use '/plot claim' if you would like to claim the plot."
 #Used in the town's status screen to display plots
 status_plot_string: 'Parcelles'
 #Displays a plot type and the amount of townblocks of that type in the town
@@ -1548,20 +1575,115 @@ msg_town_upkeep_setting_set_to: 'La ville %s a été paramétrée à %s.'
 #Shown when a player tries to set a plot type but their town has reached the limit, first number is the limit and the string is the type name.
 msg_town_plot_type_limit_reached: 'Votre ville a atteint la limite de %d %s parcelles.'
 #Added in 0.156
-msg_spawn_cost_free: 'Free'
+msg_spawn_cost_free: 'Gratuit'
 #Message shown when someone tries to set a plot's type to one already set.
-msg_plot_already_of_type: 'This plot is already a %s type.'
-msg_town_board_reset: '&bTown board reset.'
-msg_town_has_no_jailslots: 'The town jail is full.'
-msg_player_has_been_sent_to_jail_into_cell_number_x_for_x_hours_by_x_for_x_bail: '%s has been sent to %s into cell number %s for %s hours with a bail of %s by %s.'
+msg_plot_already_of_type: 'Ce plot est déjà du type %s.'
+msg_town_board_reset: '&bAffiche de ville réinitialisée.'
+msg_town_has_no_jailslots: 'La prison de ville est pleine.'
+msg_player_has_been_sent_to_jail_into_cell_number_x_for_x_hours_by_x_for_x_bail: '%s a été envoyé vers %s dans la cellule numéro %s pour %s heures avec une caution de %s par %s.'
 msg_player_has_been_sent_to_jail_into_cell_number_x_for_x_hours_by_x: '%s a été envoyé à %s dans la cellule %s pendant %s heures par %s.'
-msg_you_have_been_jailed_your_bail_is_x: 'You have been jailed, your bail is %s.'
-msg_err_higher_than_max_allowed_bail_x: 'Your set bail was higher then the maximum which is %s.'
-msg_err_higher_than_max_allowed_hours_x: 'Your set hours were higher then the maximum which is %s.'
-msg_not_enough_money_in_bank_to_jail_x_fee_is_x: 'Not enough in town bank to jail %s, fee is %s.'
-msg_you_were_released_as_town_ran_out_of_slots: 'Your jailers let you free to make space.'
-msg_x_has_been_released_as_jail_slots_ran_out: '%s has been released to make space for another prisoner.'
-msg_you_were_released_as_town_ran_out_of_upkeep_funds: 'You have been released as your jailers can no longer afford to keep you imprisoned.'
-msg_x_has_been_released_ran_out_of_upkeep_funds: '%s has been released due to a lack of funds in the Town bank.'
-msg_x_has_been_withdrawn_for_upkeep_of_prisoner_x: '%s withdrawn from Town bank to pay for upkeep for prisoner %s.'
-msg_x_has_been_withdrawn_for_jailing_of_prisoner_x: '%s withdrawn from Town bank to pay for jailing of %s.'
+msg_you_have_been_jailed_your_bail_is_x: 'Vous avez été emprisonné, votre caution est de %s.'
+msg_err_higher_than_max_allowed_bail_x: 'Votre caution est plus haute que le maximum qui est de %s.'
+msg_err_higher_than_max_allowed_hours_x: 'Le nombre d''heures est plus haut que le maximum qui est de %s.'
+msg_not_enough_money_in_bank_to_jail_x_fee_is_x: 'Il n''y a pas assez dans la banque pour emprisonnez %s, les frais sont de %s.'
+msg_you_were_released_as_town_ran_out_of_slots: 'Vos geôliers vous laissent libre pour faire de la place.'
+msg_x_has_been_released_as_jail_slots_ran_out: '%s a été libéré pour faire de la place pour un autre prisonnier.'
+msg_you_were_released_as_town_ran_out_of_upkeep_funds: 'Vous avez été libéré car vos geôliers ne peuvent plus se permettre de vous garder emprisonné.'
+msg_x_has_been_released_ran_out_of_upkeep_funds: '%s a été libéré en raison d''un manque de fonds dans la banque de Ville.'
+msg_x_has_been_withdrawn_for_upkeep_of_prisoner_x: '%s a retiré de l''argent de la banque de Ville pour l''entretien du prisonnier %s.'
+msg_x_has_been_withdrawn_for_jailing_of_prisoner_x: '%s a retiré de l''argent de la banque de Ville pour payer la prison de %s.'
+#Message shown in the confirmation for /ta resetbanks {amount}.
+confirmation_are_you_sure_you_want_to_reset_all_banks: 'Êtes-vous sûr de vouloir réinitialiser toutes les banques de ville et de nation à %s ?'
+#Message shown when a nation cannot add a town because of the max-residents-limit.
+msg_err_cannot_add_nation_over_resident_limit: '&cVotre nation a atteint le nombre maximum de résidents autorisés par nation, %s, et ne peut pas ajouter %s.'
+#Message shown to a town when they cannot join a nation because of the max-residents-limit.
+msg_err_cannot_join_nation_over_resident_limit: '&cVous ne pouvez pas rejoindre cette nation car elle dépasserait la limite des résidents par nation de %s.'
+#Message shown to a town because the nation has hit their max-towns-limit.
+msg_err_cannot_join_nation_over_town_limit: '&cVous ne pouvez pas rejoindre cette nation, elle a atteint le nombre maximum de villes autorisées par nation qui est de %s.'
+#Message shown confirming /tw set usedefaults
+confirmation_are_you_sure_you_want_to_reset_this_worlds_settings: 'Êtes-vous sûr de vouloir réinitialiser tous les paramètres de ce monde à ceux qui sont définis dans la configuration ?'
+#Part of the /town plots output.
+msg_town_plots_title: ' Parcelles de Ville'
+#Part of the /town plots output.
+msg_town_plots_town_size: '<dark_green>Taille de la Ville : <green>%s/%s'
+#Part of the /town plots output.
+msg_town_plots_town_bought: ' <aqua>[Acheté : %s/%s]'
+#Part of the /town plots output.
+msg_town_plots_town_bonus: ' <aqua>[Bonus : %s]'
+#Part of the /town plots output.
+msg_town_plots_town_nationbonus: ' <aqua>[Bonus de Nation : %s]'
+#Part of the /town plots output.
+msg_town_plots_town_owned_land: '<dark_green>Terrain possédé par la Ville: <green>%s'
+#Part of the /town plots output.
+msg_town_plots_type_header: '<dark_green>Type : <green>Possédé par des joueurs <gray>/ <aqua>En vente <gray>/ <yellow>Total'
+#Part of the /town plots output.
+msg_town_plots_type_header_revenue: ' <gray>/ <dark_green>Revenus quotidiens'
+#Part of the /town plots output.
+msg_town_plots_type_line: '<dark_green>%s = <green>%s <gray>/ <aqua>%s <gray>/ <yellow>%s'
+#Part of the /town plots output.
+msg_town_plots_type_line_revenue: ' <gray>/ <dark_green>%s'
+#Message giving confirmation warning for trusttown
+confirmation_msg_trusttown_consequences: 'Vous êtes sur le point d''accorder des autorisations complètes à une ville entière. Cela signifie que le maire de la ville pourra décider qui obtiendra l''autorisation de construire et de detruire dans votre ville, en ajoutant des habitants. Si cette ville est ouverte, alors n''importe qui peut rejoindre et obtenir un accès complet à votre ville. Êtes-vous sûr de vouloir faire confiance à tous les résidents (y compris les futurs résidents) de cette ville ?'
+#Message shown when a player uses a command that is blocked because their location has an active war.
+msg_command_war_blocked: 'Vous ne pouvez pas exécuter cette commande car votre ville est en guerre.'
+#Message shown when a player tries to unclaim land but cannot because an outsider is there (and the config doesn't allow this.)
+msg_cant_unclaim_outsider_in_town: 'Il y a un étranger dans ce bloc de ville, tu ne peux pas dérevendicer ce bloc de ville !'
+#Message shown when a player is making a town too soon after deleting one.
+msg_err_cannot_create_new_town_x_seconds_remaining: 'Vous ne pouvez pas créer une nouvelle ville, vous devez attendre %s secondes.'
+#Message shown when a player is claiming land too soon after unclaiming it.
+msg_err_cannot_claim_townblock_x_seconds_remaining: 'Vous ne pouvez pas annexer ce bloc de ville : %s, il vous reste %s à attendre.'
+#Messages shown when an admin uses /ta set founder {townname} {foundername}
+msg_founder_set: 'Le fondateur de %s est maintenant %s.'
+#Message shown when toggling town allowed to war admin setting
+msg_town_allowedtowar_setting_set_to: 'La ville de %s a été paramétrée sur %s pour l''autorisation de faire la guerre. '
+#Message shown to confirm that a player wants to unclaim all of their land, besides the homeblock, seen with /t unclaim all.
+confirmation_did_you_want_to_unclaim_all: 'Êtes-vous sûr de vouloir désannexer toute votre terre ? (Votre Centre Ville ne sera pas désannexé.)'
+#Message shown after a player unclaims all their land.
+msg_you_have_unclaimed_everything_but_your_homeblock: "Vous avez tout désannexer à part le homeblock. Pour désannexer le homeblock vous devez d'abord placer un nouveau homeblock avec '/t set homeblock'."
+msg_warn_are_you_sure_you_want_to_transfer_nation_ownership: "<red>Êtes-vous sûr de vouloir nommer %s dirigeant de la nation ? Cette action est irréversible !"
+msg_warn_town_already_capital: "<red>La ville de %s est déjà la capitale de la nation."
+msg_min_adjacent_blocks: 'Vous devez avoir au moins %s blocs de ville adjacents. Il n''y a que %s.'
+#Shown when a player with /plot evict permissions uses /plot claim on an owned but not for sale plot, please preserve comma space at the start when translating.
+msg_plot_claim_consider_evict_instead: ', peut-être cherchez-vous plutôt /plot evict ?'
+#Shown to a player when Towny does not know of them.
+msg_you_are_unknown: "Vous n'êtes pas connu de Towny."
+#Generic Resident/Town/Nation/Thing is not known to Towny.
+msg_townyobject_unknown: "%s n'est pas connu de Towny."
+#Shown when a resident is unknown to Towny.
+msg_err_resident_unknown: "%s n'est pas un résident connu."
+#Shown when a town is unknown to Towny.
+msg_err_town_unknown: "%s n'est pas une ville connue."
+#Shown when a nation is unknown to Towny.
+msg_err_nation_unknown: "%s n'est pas une nation connue."
+#Shown when a resident doesn't belong to a town.
+msg_err_townyobject_x_has_no_town: "%s n'appartient à aucune ville."
+#Shown when a town doesn't belong to a nation.
+msg_err_townyobject_x_has_no_nation: "%s n'appartient à aucune nation."
+#Shown to admins when they use /plot claimedat on a plot which has no registration date.
+msg_err_townblock_has_no_claimedat_data: "Cette parcelle n'a aucune donnée sur le moment où elle a été réclamé."
+#Shown when someone cannot afford something, to tell them what it costs.
+msg_err_you_need_x_to_pay: "Vous avez besoin de %s pour payer."
+#Shown when someone tries to deposit/withdraw 0 amounts.
+msg_err_amount_must_be_greater_than_zero: "Amount must be greater than zero."
+#Message shown when taking over claims is disabled on a server.
+msg_err_taking_over_claims_is_not_enabled: "Taking over claims is not enabled on this server."
+#Messages shown when taking over a claim is not allowed because the town is not overclaimed.
+msg_err_this_townblock_cannot_be_taken_over: "This TownBlock cannot be taken over, the town that it belongs to is not overclaimed."
+#Message shown when taking over a claim would also set the homeblock because the town has no claims.
+msg_err_you_cannot_make_this_your_homeblock: "You cannot make this claim because it would make this TownBlock your homeblock, which is not allowed."
+#Message shown when taking over a claim is stopped by another plugin.
+msg_err_another_plugin_cancelled_takeover: "Another plugin has stopped your takeover of this land."
+#Confirmation shown when taking over a claim.
+confirmation_you_are_about_to_take_over_a_claim: "You are about to take over a claim belonging to %s for the cost: %s. Did you want to continue?"
+#Warning message shown when a town is beginning to claim close to their limit, and the takeoverclaim feature is active.
+msg_warning_you_are_almost_out_of_townblocks: "Warning: You have nearly used up your available townblocks for claiming. If you lose a resident you will be at risk of your town being able to have townblocks stolen by other towns."
+#Warning message shown on login when a town is overclaimed and at risk of falling victim to the takeoverclaim feature.
+msg_warning_your_town_is_overclaimed: "Warning: Your town is overclaimed. While you have too many townblocks claimed, it will be possible for other towns to takeover plots of your town, consider unclaiming some land."
+#Chunk Notification slug, shown when entering a plot that can be stolen.
+chunk_notification_takeover_available: " <red>[TakeoverClaim Available]"
+#Message shown when a takeover claim would cut a town into two sections.
+msg_err_you_cannot_over_claim_would_cut_into_two: "You cannot take over this plot, because doing so would split the town into two segments. You will have to overclaim from a different direction."
+#Message shown when an admin tries to toggle conquered off of a town that is not conquered.
+msg_err_that_town_is_not_conquered: "%s is already not conquered."
+#Message shown when a town has its conquered status removed by an admin.
+msg_conquered_status_removed: "%s has had their conquered status removed."

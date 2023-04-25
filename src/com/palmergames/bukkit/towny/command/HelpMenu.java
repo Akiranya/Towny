@@ -87,7 +87,8 @@ public enum HelpMenu {
 				.add("[town] withdraw [amount]", "")
 				.add("[town] bankhistory", "")
 				.add("[town] outlaw [add|remove] [name]", "")
-				.add("[town] leavenation", "");
+				.add("[town] leavenation", "")
+				.add("[town] conquered", "");
 		}
 	},
 
@@ -252,6 +253,14 @@ public enum HelpMenu {
 		}
 	},
 
+	TA_SET_FOUNDER {
+		@Override
+		protected MenuBuilder load() {
+			return new MenuBuilder("townyadmin set founder")
+				.add("founder [town] [foundername]", "");
+		}
+	},
+
 	TA_SET_PLOT {
 		@Override
 		protected MenuBuilder load() {
@@ -389,7 +398,7 @@ public enum HelpMenu {
 	TOWNYWORLD_TOGGLE_CONSOLE {
 		@Override
 		protected MenuBuilder load() {
-			return new MenuBuilder("townyworld toggle {worldname}")
+			return new MenuBuilder("townyworld {worldname} toggle")
 				.add("claimable", "")
 				.add("usingtowny", "")
 				.add("warallowed", "")
@@ -599,6 +608,7 @@ public enum HelpMenu {
 				.add("explosion", "")
 				.add("plotborder", "")
 				.add("constantplotborder", "")
+				.add("townborder", "")
 				.add("ignoreplots", "")
 				.add("townclaim", "")
 				.add("map", "")
@@ -728,6 +738,14 @@ public enum HelpMenu {
 		}
 	},
 	
+	NATION_RANK {
+		@Override
+		protected MenuBuilder load() {
+			return new MenuBuilder("nation rank")
+				.add("add/remove [resident] rank", "");
+		}
+	},
+	
 	NATION_LIST {
 		@Override
 		protected MenuBuilder load() {
@@ -809,6 +827,7 @@ public enum HelpMenu {
 			return new MenuBuilder("invite", "")
 				.add(TownySettings.getAcceptCommand() + " [town]", Translation.of("invite_help_1"))
 				.add(TownySettings.getDenyCommand() + " [town]", Translation.of("invite_help_2"))
+				.add(TownySettings.getDenyCommand() + " all", Translation.of("invite_help_4"))
 				.add("list", Translation.of("invite_help_3"));
 		}
 	},
@@ -836,7 +855,8 @@ public enum HelpMenu {
 			return new MenuBuilder("nation toggle")
 				.add("", "/nation toggle", "peaceful/neutral", "")
 				.add("", "/nation toggle", "public", "")
-				.add("", "/nation toggle", "open", "");
+				.add("", "/nation toggle", "open", "")
+				.add("", "/nation toggle", "taxpercent", "");
 		}
 	}, 
 	
@@ -875,6 +895,16 @@ public enum HelpMenu {
 			return new MenuBuilder("town trust")
 				.add("add [resident]", "")
 				.add("remove [resident]", "")
+				.add("list", "");
+		}
+	},
+	
+	TOWN_TRUSTTOWN_HELP {
+		@Override
+		protected MenuBuilder load() {
+			return new MenuBuilder("town trusttown")
+				.add("add [town]", "")
+				.add("remove [town]", "")
 				.add("list", "");
 		}
 	},

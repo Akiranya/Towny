@@ -1,6 +1,5 @@
 package com.palmergames.bukkit.towny.tasks;
 
-import com.earth2me.essentials.Essentials;
 import com.palmergames.bukkit.towny.Towny;
 import com.palmergames.bukkit.towny.TownyAPI;
 import com.palmergames.bukkit.towny.TownyEconomyHandler;
@@ -20,10 +19,15 @@ import com.palmergames.bukkit.towny.permissions.TownyPerms;
 import com.palmergames.bukkit.towny.utils.ResidentUtil;
 import com.palmergames.bukkit.towny.utils.TownRuinUtil;
 import com.palmergames.bukkit.util.BukkitTools;
+import com.palmergames.bukkit.util.Colors;
+
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.event.ClickEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.metadata.MetadataValue;
+
+import java.util.logging.Level;
 
 
 /**
@@ -52,9 +56,9 @@ public class OnPlayerLogin implements Runnable {
 	@Override
 	public void run() {
 		
-		Resident resident = null;
+		Resident resident = universe.getResident(player.getUniqueId());
 
-		if (!universe.hasResident(player.getUniqueId())) {
+		if (resident == null) {
 			/*
 			 * No record of this resident's UUID.
 			 */
@@ -121,16 +125,13 @@ public class OnPlayerLogin implements Runnable {
 			/*
 			 * We do have record of this UUID being used before, log in the resident after checking for a name change.
 			 */
-			resident = universe.getResident(player.getUniqueId());
 			
 			// Name change test.
 			if (!resident.getName().equals(player.getName())) {
 				try {
 					universe.getDataSource().renamePlayer(resident, player.getName());
-				} catch (AlreadyRegisteredException e) {
-					e.printStackTrace();
-				} catch (NotRegisteredException e) {
-					e.printStackTrace();
+				} catch (AlreadyRegisteredException | NotRegisteredException e) {
+					plugin.getLogger().log(Level.WARNING, "An exception occurred when trying to rename " + resident.getName() + " to " + player.getName(), e);
 				}
 			}
 			/*
@@ -142,9 +143,9 @@ public class OnPlayerLogin implements Runnable {
 
 		if (resident != null) {
 			TownyPerms.assignPermissions(resident, player);
-				
-			if (resident.hasTown()) {
-				Town town = resident.getTownOrNull();
+			
+			final Town town = resident.getTownOrNull();
+			if (town != null) {
 				Nation nation = resident.getNationOrNull();
 				
 				if (TownySettings.getShowTownBoardOnLogin() && !town.getBoard().isEmpty())
@@ -154,8 +155,17 @@ public class OnPlayerLogin implements Runnable {
 					TownyMessaging.sendNationBoard(player, nation);
 				
 				// Send any warning messages at login.
-				if (TownyEconomyHandler.isActive() && TownySettings.isTaxingDaily())
-					warningMessage(resident, town, nation);
+				if (TownyEconomyHandler.isActive() && TownySettings.isTaxingDaily()) {
+					if (TownySettings.isEconomyAsync()) {
+						final Resident finalResident = resident;
+						Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> warningMessage(finalResident, town, nation));
+					} else
+						warningMessage(resident, town, nation);
+				}
+				
+				// Send a message warning of being overclaimed while the takeoverclaims feature is enabled.
+				if (TownySettings.isOverClaimingAllowingStolenLand() && town.getTownBlocks().size() > town.getMaxTownBlocks())
+					TownyMessaging.sendMsg(resident, Translatable.literal(Colors.Red).append(Translatable.of("msg_warning_your_town_is_overclaimed")));
 				
 				// Send a message warning of ruined status and time until deletion.
 				if (town.isRuined())
@@ -163,8 +173,8 @@ public class OnPlayerLogin implements Runnable {
 			}
 			
 			// Check if this is a player spawning into a Town in which they are outlawed.
-			Town town = TownyAPI.getInstance().getTown(player.getLocation());
-			if (town != null && town.hasOutlaw(resident))
+			Town insideTown = TownyAPI.getInstance().getTown(player.getLocation());
+			if (insideTown != null && insideTown.hasOutlaw(resident))
 				ResidentUtil.outlawEnteredTown(resident, town, player.getLocation());
 
 			//Schedule to setup default modes when the player has finished loading
@@ -187,27 +197,24 @@ public class OnPlayerLogin implements Runnable {
 	 * @param resident Resident logging in.
 	 */
 	private void loginExistingResident(Resident resident) {
-		if (TownySettings.isUsingEssentials()) {
-			Essentials ess = (Essentials) Bukkit.getPluginManager().getPlugin("Essentials");
-			/*
-			 * Don't update last online for a player who is vanished.
-			 */
-			if (!ess.getUser(player).isVanished())
+
+		// Done in a task because some plugins won't assign the vanished meta to the
+		// player until 1 tick after the player logs in.
+		Bukkit.getScheduler().runTaskLater(plugin, () -> {
+			if (player.getMetadata("vanished").stream().noneMatch(MetadataValue::asBoolean))
 				resident.setLastOnline(System.currentTimeMillis());
-		} else {
-			resident.setLastOnline(System.currentTimeMillis());
-		}
-		if (!resident.hasUUID()) {
-			resident.setUUID(player.getUniqueId());
-			try {
-				TownyUniverse.getInstance().registerResidentUUID(resident);
-			} catch (AlreadyRegisteredException e) {
-				e.printStackTrace();
+
+			if (!resident.hasUUID()) {
+				resident.setUUID(player.getUniqueId());
+				try {
+					TownyUniverse.getInstance().registerResidentUUID(resident);
+				} catch (AlreadyRegisteredException e) {
+					e.printStackTrace();
+				}
+				TownySettings.incrementUUIDCount();
 			}
-			TownySettings.incrementUUIDCount();
-		}
-		resident.save();
-			
+			resident.save();
+		}, 5);
 	}
 	
 	/**

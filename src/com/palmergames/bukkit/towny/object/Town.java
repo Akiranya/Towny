@@ -12,10 +12,14 @@ import com.palmergames.bukkit.towny.event.BonusBlockPurchaseCostCalculationEvent
 import com.palmergames.bukkit.towny.event.TownBlockClaimCostCalculationEvent;
 import com.palmergames.bukkit.towny.event.town.TownAddAlliedTownEvent;
 import com.palmergames.bukkit.towny.event.town.TownAddEnemiedTownEvent;
+import com.palmergames.bukkit.towny.event.town.TownConqueredEvent;
 import com.palmergames.bukkit.towny.event.town.TownMapColourLocalCalculationEvent;
 import com.palmergames.bukkit.towny.event.town.TownMapColourNationalCalculationEvent;
+import com.palmergames.bukkit.towny.event.town.TownMayorChangedEvent;
+import com.palmergames.bukkit.towny.event.town.TownMayorChosenBySuccessionEvent;
 import com.palmergames.bukkit.towny.event.town.TownRemoveAlliedTownEvent;
 import com.palmergames.bukkit.towny.event.town.TownRemoveEnemiedTownEvent;
+import com.palmergames.bukkit.towny.event.town.TownUnconquerEvent;
 import com.palmergames.bukkit.towny.exceptions.AlreadyRegisteredException;
 import com.palmergames.bukkit.towny.exceptions.EmptyNationException;
 import com.palmergames.bukkit.towny.exceptions.EmptyTownException;
@@ -25,6 +29,7 @@ import com.palmergames.bukkit.towny.object.SpawnPoint.SpawnPointType;
 import com.palmergames.bukkit.towny.object.jail.Jail;
 import com.palmergames.bukkit.towny.object.metadata.CustomDataField;
 import com.palmergames.bukkit.towny.permissions.TownyPerms;
+import com.palmergames.bukkit.towny.utils.CombatUtil;
 import com.palmergames.bukkit.util.BukkitTools;
 import com.palmergames.util.MathUtil;
 import net.kyori.adventure.audience.Audience;
@@ -60,12 +65,14 @@ public class Town extends Government implements TownBlockOwner {
 	private Map<UUID, Town> allies = new LinkedHashMap<>();
 	private Map<UUID, Town> enemies = new LinkedHashMap<>();
 	private final Set<Resident> trustedResidents = new HashSet<>();
+	private final Map<UUID, Town> trustedTowns = new LinkedHashMap<>();
 	private List<Location> outpostSpawns = new ArrayList<>();
 	private List<Jail> jails = null;
 	private HashMap<String, PlotGroup> plotGroups = null;
 	private TownBlockTypeCache plotTypeCache = new TownBlockTypeCache();
 	
 	private Resident mayor;
+	private String founderName;
 	private int bonusBlocks = 0;
 	private int purchasedBlocks = 0;
 	private double plotTax= TownySettings.getTownDefaultPlotTax();
@@ -84,6 +91,7 @@ public class Town extends Government implements TownBlockOwner {
 	private TownyWorld world;
 	private boolean adminDisabledPVP = false; // This is a special setting to make a town ignore All PVP settings and keep PVP disabled.
 	private boolean adminEnabledPVP = false; // This is a special setting to make a town ignore All PVP settings and keep PVP enabled. Overrides the admin disabled too.
+	private boolean allowedToWar = TownySettings.getTownDefaultAllowedToWar();
 	private boolean isConquered = false;
 	private int conqueredDays;
 	private int nationZoneOverride = 0;
@@ -186,7 +194,7 @@ public class Town extends Government implements TownBlockOwner {
 		if (!hasResident(mayor))
 			throw new TownyException(Translation.of("msg_err_mayor_doesnt_belong_to_town"));
 		
-		setMayor(mayor);
+		setMayor(mayor, false);
 	}
 	
 	/**
@@ -195,12 +203,27 @@ public class Town extends Government implements TownBlockOwner {
 	 * @param mayor - Resident to become mayor.
 	 */
 	public void setMayor(Resident mayor) {
+		setMayor(mayor, true);
+	}
+	
+	public void setMayor(Resident mayor, boolean callEvent) {
 		if (!hasResident(mayor))
 			return;
-				
+
+		if (callEvent)
+			BukkitTools.fireEvent(new TownMayorChangedEvent(this.mayor, mayor));
+
 		this.mayor = mayor;
-		
-		TownyPerms.assignPermissions(mayor, null);	
+
+		TownyPerms.assignPermissions(mayor, null);
+	}
+
+	public String getFounder() {
+		return founderName != null ? founderName : getMayor() != null ? getMayor().getName() : "None";
+	}
+
+	public void setFounder(String founderName) {
+		this.founderName = founderName;
 	}
 
 	public Nation getNation() throws NotRegisteredException {
@@ -448,6 +471,14 @@ public class Town extends Government implements TownBlockOwner {
 		return this.adminEnabledPVP;
 	}
 
+	public boolean isAllowedToWar() {
+		return allowedToWar;
+	}
+
+	public void setAllowedToWar(boolean allowedToWar) {
+		this.allowedToWar = allowedToWar;
+	}
+
 	/**
 	 * @deprecated Deprecated as of 0.98.3.5, use {@link #setExplosion(boolean)} instead.
 	 */
@@ -475,7 +506,7 @@ public class Town extends Government implements TownBlockOwner {
 	public void setTaxPercentage(boolean isPercentage) {
 
 		this.isTaxPercentage = isPercentage;
-		if (this.getTaxes() > 100) {
+		if (isPercentage && this.getTaxes() > 100) {
 			this.setTaxes(0);
 		}
 	}
@@ -784,47 +815,30 @@ public class Town extends Government implements TownBlockOwner {
 	 */
 	public void findNewMayor() {
 		for (String rank : TownySettings.getOrderOfMayoralSuccession()) {
-			if (findNewMayor(rank)) {
+			if (findNewMayor(getRank(rank))) {
 				return;
 			}
 		}
 		// No one has the rank to succeed the mayor, choose a resident.
-		findNewMayorCatchAll();
+		findNewMayor(getResidents());
 	}
 
 	/**
-	 * Tries to find a new mayor from among the town's residents with the rank specified.
+	 * Tries to find a new mayor from ths list of potential residenst.
 	 * 
-	 * @param rank - the rank being checked for potential mayors
-	 * @return found - whether or not a new mayor was found
+	 * @param potentialResidents the List of Residents that could be mayor.
+	 * @return true if a new mayor is selected.
 	 */
-	private boolean findNewMayor(String rank) {
-		boolean found = false;
-		for (Resident newMayor : getRank(rank)) {
-			if ((newMayor != mayor) && (newMayor.hasTownRank(rank))) {  // The latter portion seems redundant.
-				setMayor(newMayor);
-				found = true;
-				break;
-			}
+	private boolean findNewMayor(List<Resident> potentialResidents) {
+		for (Resident newMayor : potentialResidents) {
+			if (newMayor.equals(mayor))
+				continue;
+
+			TownMayorChosenBySuccessionEvent tmcbse = new TownMayorChosenBySuccessionEvent(mayor, newMayor, potentialResidents);
+			setMayor(tmcbse.getNewMayor());
+			return true;
 		}
-		return found;
-	}
-	
-	/**
-	 * Tries to find a new mayor from among the town's residents.
-	 * 
-	 * @return found - whether or not a new mayor was found
-	 */
-	private boolean findNewMayorCatchAll() {
-		boolean found = false;
-		for (Resident newMayor : getResidents()) {
-			if (newMayor != mayor) {
-				setMayor(newMayor);
-				found = true;
-				break;
-			}
-		}
-		return found;
+		return false;
 	}
 
 	@Override
@@ -865,6 +879,8 @@ public class Town extends Government implements TownBlockOwner {
 			// Remove the spawn point for this outpost.
 			if (townBlock.isOutpost() || isAnOutpost(townBlock.getCoord())) {
 				removeOutpostSpawn(townBlock.getCoord());
+				townBlock.setOutpost(false);
+				townBlock.save();
 			}
 			if (townBlock.isJail()) {
 				removeJail(townBlock.getJail());
@@ -1066,7 +1082,7 @@ public class Town extends Government implements TownBlockOwner {
 	public void collect(double amount) {
 		
 		if (TownyEconomyHandler.isActive()) {
-			double bankcap = TownySettings.getTownBankCap();
+			double bankcap = getBankCap();
 			if (bankcap > 0 && amount + getAccount().getHoldingBalance() > bankcap) {
 				TownyMessaging.sendPrefixedTownMessage(this, Translatable.of("msg_err_deposit_capped", bankcap));
 				return;
@@ -1158,19 +1174,7 @@ public class Town extends Government implements TownBlockOwner {
 	}
 
 	public boolean isAlliedWith(Town othertown) {
-		if (this.hasNation() && othertown.hasNation()) {
-			try {
-				if (this.getNation().hasAlly(othertown.getNation())) {
-					return true;
-				} else {
-					return this.getNation().equals(othertown.getNation());
-				}
-			} catch (NotRegisteredException e) {
-				return false;
-			}
-		} else {
-			return false;
-		}
+		return CombatUtil.isAlly(this, othertown);
 	}
 
 	public int getOutpostLimit() {
@@ -1204,9 +1208,24 @@ public class Town extends Government implements TownBlockOwner {
 	public void removeMetaData(@NotNull CustomDataField<?> md) {
 		this.removeMetaData(md, true);
 	}
-	
+
 	public void setConquered(boolean conquered) {
+		setConquered(conquered, true);
+	}
+	
+	public void setConquered(boolean conquered, boolean callEvent) {
+		if (conquered == this.isConquered)
+			return;
+
 		this.isConquered = conquered;
+
+		if (!callEvent)
+			return;
+
+		if (this.isConquered)
+			BukkitTools.fireEvent(new TownConqueredEvent(this));
+		else
+			BukkitTools.fireEvent(new TownUnconquerEvent(this));
 	}
 	
 	public boolean isConquered() {
@@ -1336,7 +1355,7 @@ public class Town extends Government implements TownBlockOwner {
 
 	@Override
 	public double getBankCap() {
-		return TownySettings.getTownBankCap();
+		return TownySettings.getTownBankCap(this);
 	}
 	
 	public World getWorld() {
@@ -1488,7 +1507,8 @@ public class Town extends Government implements TownBlockOwner {
 	}
 	
 	public boolean hasTrustedResident(Resident resident) {
-		return trustedResidents.contains(resident);
+		Town residentsTown = resident.getTownOrNull();
+		return trustedResidents.contains(resident) || (residentsTown != null && this.hasTrustedTown(residentsTown));
 	}
 	
 	public void addTrustedResident(Resident resident) {
@@ -1556,7 +1576,35 @@ public class Town extends Government implements TownBlockOwner {
 	public boolean hasMutualAlly(Town town) {
 		return hasAlly(town) && town.hasAlly(this);
 	}
+	/**
+	 * Only to be used when loading the database.
+	 * @param towns List&lt;Town&gt; which will be loaded in as trusted towns.
+	 */
+	public void loadTrustedTowns(List<Town> towns) {
+		for (Town trustTown : towns) {
+			trustedTowns.put(trustTown.getUUID(), trustTown);
+		}
+	}
 
+	public void addTrustedTown(Town town) {
+		trustedTowns.put(town.getUUID(), town);
+	}
+
+	public void removeTrustedTown(Town town) {
+		trustedTowns.remove(town.getUUID());
+	}
+
+	public boolean removeAllTrustedTowns() {
+		for (Town trusted : new ArrayList<>(getTrustedTowns())) {
+			removeTrustedTown(trusted);
+		}
+		return getTrustedTowns().isEmpty();
+	}
+
+	public boolean hasTrustedTown(Town town) {
+		return trustedTowns.containsKey(town.getUUID());
+	}
+	
 	/**
 	 * Only to be used when loading the database.
 	 * @param towns List&lt;Town&gt; which will be loaded in as enemies.
@@ -1605,6 +1653,10 @@ public class Town extends Government implements TownBlockOwner {
 	public List<Town> getAllies() {
 		return Collections.unmodifiableList(allies.values().stream().collect(Collectors.toList()));
 	}
+
+	public List<Town> getTrustedTowns() {
+		return Collections.unmodifiableList(trustedTowns.values().stream().collect(Collectors.toList()));
+	}
 	
 	public List<Town> getMutualAllies() {
 		List<Town> result = new ArrayList<>();
@@ -1623,6 +1675,9 @@ public class Town extends Government implements TownBlockOwner {
 		return Collections.unmodifiableList(enemies.keySet().stream().collect(Collectors.toList()));
 	}
 	
+	public List<UUID> getTrustedTownsUUIDS() {
+		return Collections.unmodifiableList(trustedTowns.keySet().stream().collect(Collectors.toList()));
+	}
 	public boolean isNationZoneEnabled() {
 		return nationZoneEnabled;
 	}
@@ -1682,14 +1737,14 @@ public class Town extends Government implements TownBlockOwner {
 			return 0;
 
 		int key = 0;
-		for (int level : TownySettings.getConfigTownLevel().keySet()) {
+		for (int populationLevel : TownySettings.getConfigTownLevel().keySet()) {
 			key++;
 			// Some towns might have their townlevel overridden.
 			if (getManualTownLevel() > -1 && key == getMaxLevel() - getManualTownLevel())
-				return level;
+				return populationLevel;
 			// No overridden townlevel, use population instead.
-			if (getManualTownLevel() == -1 && populationSize >= level)
-				return level;
+			if (getManualTownLevel() == -1 && populationSize >= populationLevel)
+				return populationLevel;
 		}
 		return 0;
 	}
@@ -1722,6 +1777,9 @@ public class Town extends Government implements TownBlockOwner {
 	public int getLevelID() {
 		if(this.isRuined())
 			return 0;
+
+		if (getManualTownLevel() > -1)
+			return getManualTownLevel();
 
 		int townLevelId = -1;
 		for (Integer level : TownySettings.getConfigTownLevel().keySet()) {

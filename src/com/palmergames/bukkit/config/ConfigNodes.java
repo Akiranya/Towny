@@ -101,6 +101,13 @@ public enum ConfigNodes {
 			"false",
 			"",
 			"# Default neutral status of the town (are new towns neutral by default?)"),
+	TOWN_DEF_ALLOWED_TO_WAR(
+			"town.default_allowed_to_war",
+			"true",
+			"",
+			"# Default status of new towns, (are they allowed to have a war/battle?)",
+			"# This setting is not used internally by Towny. It is available for war/battle plugins to use.",
+			"# Setting this false should mean your town cannot be involved in a war supplied by another plugin."),
 	TOWN_DEF_BOARD("town.default_board", 
 			"/town set board [msg]",
 			"",
@@ -175,6 +182,27 @@ public enum ConfigNodes {
 			"# set to 0 to disable limiting of claim radius value check.",
 			"# keep in mind that the default value of 4 is a radius, ",
 			"# and it will allow claiming 9x9 (80 plots) at once."),
+
+	TOWN_OVERCLAIMING_ROOT("town.overclaiming", "", "", ""),
+	TOWN_OVER_ALLOWED_CLAIM_LIMITS_ALLOWS_STEALING_LAND(
+			"town.overclaiming.being_overclaimed_allows_other_towns_to_steal_land",
+			"false",
+			"",
+			"# A feature that allows towns which have too many townblocks claimed (overclaimed) ie: 120/100 TownBlocks, ",
+			"# to have their land stolen by other towns which are not overclaimed. Using this incentivises Towns to keep",
+			"# their residents from leaving, and will mean that mayors will be more careful about which land they choose",
+			"# to claim.",
+			"# Overclaiming does not allow a town to be split into two separate parts, requiring the Town that is stealing",
+			"# land to work from the outside inwards.",
+			"# It is highly recommended to only use this on servers where outposts are disabled, and requiring ",
+			"# a number of adjacent claims over 1 is enabled.",
+			"# Towns take land using /t takeoverclaim."),
+	TOWN_OVERCLAIMING_PREVENTED_BY_HOMEBLOCK_RADIUS(
+			"town.overclaiming.overclaiming_prevented_by_homeblock_radius",
+			"true",
+			"",
+			"# While true, overclaiming is stopped by the min_distance_from_town_homeblock setting below.",
+			"# This prevents a town from having townblocks stolen surrounding their homeblocks."),
 	TOWN_LIMIT(
 			"town.town_limit",
 			"3000",
@@ -238,6 +266,20 @@ public enum ConfigNodes {
 			"",
 			"# Maximum distance between homeblocks.",
 			"# This will force players to build close together."),
+	TOWN_NEW_TOWN_MIN_DISTANCE_FROM_TOWN_PLOT(
+			"town.new_town_min_distance_from_town_plot",
+			"-1",
+			"",
+			"# The minimum distance that a new town must be from nearby towns' plots.",
+
+			"# When set to -1, this will use the value of the min_plot_distance_from_town_plot option."),
+	TOWN_NEW_TOWN_MIN_DISTANCE_FROM_TOWN_HOMEBLOCK(
+			"town.new_town_min_distance_from_town_homeblock",
+			"-1",
+			"",
+			"# The minimum distance that a new town must be from nearby towns' homeblocks.",
+
+			"# When set to -1, this will use the value of the min_distance_from_town_homeblock setting."),
 	TOWN_TOWN_BLOCK_RATIO(
 			"town.town_block_ratio",
 			"8",
@@ -260,6 +302,13 @@ public enum ConfigNodes {
 			"# at the cost of more work setting up. Also, extremely small values will render the caching done useless.",
 			"# Each cell is (town_block_size * town_block_size * height-of-the-world) in size, with height-of-the-world",
 			"# being from the bottom to the top of the build-able world."),
+	TOWN_MIN_ADJACENT_BLOCKS(
+			"town.min_adjacent_blocks",
+			"-1",
+			"",
+			"# The minimum adjacent town blocks required to expand.",
+			"# This can prevent long lines and snake-like patterns.",
+			"# Set to -1 to disable. Set to 3 to force wider expansions of towns."),
 	
 	NATION("nation", "", "", "",
 			"############################################################",
@@ -285,6 +334,24 @@ public enum ConfigNodes {
 			"false",
 			"",
 			"# Setting this to true will set a nation's tag automatically using the first four characters of the nation's name."),
+	NATION_DEF_TAXES("nation.default_taxes",
+			"",
+			"",
+			"# Default tax settings for new nations."),
+	NATION_DEF_TAXES_TAX("nation.default_taxes.tax",
+			"0.0",
+			"",
+			"# Default amount of tax of a new nation. This must be lower than the economy.daily_taxes.max_nation_tax_amount setting."),
+	NATION_DEF_TAXES_TAXPERCENTAGE("nation.default_taxes.taxpercentage",
+			"false",
+			"",
+			"# Default status of new nation's taxpercentage. True means that the default_tax is treated as a percentage instead of a fixed amount."),
+	NATION_DEF_TAXES_MINIMUMTAX(
+			"nation.default_taxes.minimumtax",
+			"0.0",
+			"",
+			"# A required minimum tax amount for the default_tax, will not change any nations which already have a tax set.",
+			"# Do not forget to set the default_tax to more than 0 or new nations will still begin with a tax of zero."),
 	
 	NWS(
 			"new_world_settings",
@@ -307,77 +374,90 @@ public enum ConfigNodes {
 			""),
 
 	NWS_WORLD_USING_TOWNY("new_world_settings.using_towny", "true",
-			"# Do new worlds have Towny enabled by default?"),
+			"# Do new worlds have Towny enabled by default?",
+			"# You can adjust this setting for an existing world using /townyworld toggle usingtowny"),
 	NWS_WORLD_CLAIMABLE("new_world_settings.are_new_world_claimable",
 			"true",
 			"",
 			"# Are new worlds claimable by default?",
-			"# Setting this to false means that Towny will still be active but no land can be claimed by towns."),
+			"# Setting this to false means that Towny will still be active but no land can be claimed by towns.",
+			"# You can adjust this setting for an existing world using /townyworld toggle claimable"),
 
 	NWS_WORLD_PVP_HEADER("new_world_settings.pvp", "", ""),
 	NWS_WORLD_PVP(
 			"new_world_settings.pvp.world_pvp",
 			"true",
-			"# Do new worlds have pvp enabled by default?"),
+			"# Do new worlds have pvp enabled by default?",
+			"# You can adjust this setting for an existing world using /townyworld toggle pvp"),
 	NWS_FORCE_PVP_ON(
 			"new_world_settings.pvp.force_pvp_on",
 			"false",
 			"",
 			"# Do new worlds have pvp forced on by default?",
-			"# This setting overrides a towns' setting."),
+			"# This setting overrides a towns' setting.",
+			"# You can adjust this setting for an existing world using /townyworld toggle forcepvp"),
 	NWS_FRIENDLY_FIRE_ENABLED(
 			"new_world_settings.pvp.friendly_fire_enabled",
 			"false",
 			"",
 			"# Do new world have friendly fire enabled by default?",
 			"# Does not affect Arena Plots which have FF enabled all the time.",
-			"# When true players on the same town or nation will harm each other."),	
+			"# When true players on the same town or nation will harm each other.",
+			"# You can adjust this setting for an existing world using /townyworld toggle friendlyfire"),
 	NWS_WAR_ALLOWED(
 			"new_world_settings.pvp.war_allowed",
 			"true",
 			"",
-			"# Do new worlds have their war_allowed enabled by default?"),
+			"# Do new worlds have their war_allowed enabled by default?",
+			"# You can adjust this setting for an existing world using /townyworld toggle warallowed"),
 	
 	NWS_WORLD_MONSTERS_HEADER("new_world_settings.mobs", "", ""),
 	NWS_WORLD_MONSTERS_ON(
 			"new_world_settings.mobs.world_monsters_on",
 			"true",
-			"# Do new worlds have world_monsters_on enabled by default?"),
+			"# Do new worlds have world_monsters_on enabled by default?",
+			"# You can adjust this setting for an existing world using /townyworld toggle worldmobs"),
 	NWS_WILDERNESS_MONSTERS_ON(
 			"new_world_settings.mobs.wilderness_monsters_on",
 			"true",
 			"",
-			"# Do new worlds have wilderness_monsters_on enabled by default?"),
+			"# Do new worlds have wilderness_monsters_on enabled by default?",
+			"# You can adjust this setting for an existing world using /townyworld toggle wildernessmobs"),
 	NWS_FORCE_TOWN_MONSTERS_ON(
 			"new_world_settings.mobs.force_town_monsters_on",
 			"false",
 			"",
 			"# Do new worlds have force_town_monsters_on enabled by default?",
-			"# This setting overrides a towns' setting."),
+			"# This setting overrides a towns' setting.",
+			"# You can adjust this setting for an existing world using /townyworld toggle townmobs"),
 
 	NWS_WORLD_EXPLOSION_HEADER("new_world_settings.explosions", "", ""),
 	NWS_WORLD_EXPLOSION(
 			"new_world_settings.explosions.world_explosions_enabled",
 			"true",
-			"# Do new worlds have explosions enabled by default?"),
+			"# Do new worlds have explosions enabled by default?",
+			"# You can adjust this setting for an existing world using /townyworld toggle explosion"),
 	NWS_FORCE_EXPLOSIONS_ON(
 			"new_world_settings.explosions.force_explosions_on",
 			"false",
 			"",
 			"# Do new worlds have force_explosions_on enabled by default.",
-			"# This setting overrides a towns' setting, preventing them from turning explosions off in their town."),
+			"# This setting overrides a towns' setting, preventing them from turning explosions off in their town.",
+			"# You can adjust this setting for an existing world using /townyworld toggle forceexplosion"),
 
 	NWS_WORLD_FIRE_HEADER("new_world_settings.fire", "", ""),
 	NWS_WORLD_FIRE(
 			"new_world_settings.fire.world_firespread_enabled",
 			"true",
-			"# Do new worlds allow fire to be lit and spread by default?"),
+			"# Do new worlds allow fire to be lit and spread by default?",
+			"# You can adjust this setting for an existing world using /townyworld toggle fire"),
 	NWS_FORCE_FIRE_ON(
 			"new_world_settings.fire.force_fire_on",
 			"false",
 			"",
 			"# Do new worlds have force_fire_on enabled by default?",
-			"# This setting overrides a towns' setting."),
+			"# This setting overrides a towns' setting.",
+			"# You can adjust this setting for an existing world using /townyworld toggle forcefire"),
 
 	NWS_WORLD_ENDERMAN(
 			"new_world_settings.enderman_protect",
@@ -404,7 +484,9 @@ public enum ConfigNodes {
 			"# This section is applied to new worlds as default settings when new worlds are detected."),
 	NWS_PLOT_MANAGEMENT_DELETE_ENABLE(
 			"new_world_settings.plot_management.block_delete.enabled",
-			"true"),
+			"true",
+			"",
+			"# You can adjust this setting for an existing world using /townyworld toggle unclaimblockdelete"),
 	NWS_PLOT_MANAGEMENT_DELETE(
 			"new_world_settings.plot_management.block_delete.unclaim_delete",
 			"BEDS,TORCHES,REDSTONE_WIRE,SIGNS,DOORS,PRESSURE_PLATES",
@@ -433,7 +515,9 @@ public enum ConfigNodes {
 			"# This section is applied to new worlds as default settings when new worlds are detected."),
 	NWS_PLOT_MANAGEMENT_MAYOR_DELETE_ENABLE(
 			"new_world_settings.plot_management.mayor_plotblock_delete.enabled",
-			"true"),
+			"true",
+			"",
+			"# You can adjust this setting for an existing world using /townyworld toggle plotcleardelete"),
 	NWS_PLOT_MANAGEMENT_MAYOR_DELETE(
 			"new_world_settings.plot_management.mayor_plotblock_delete.mayor_plot_delete",
 			"SIGNS",
@@ -453,9 +537,11 @@ public enum ConfigNodes {
 			"# If this is enabled any town plots which become unclaimed will",
 			"# slowly be reverted to a snapshot taken before the plot was claimed.",
 			"#",
-			"# Regeneration will only work if the plot was",
-			"# claimed under version 0.76.2, or",
-			"# later with this feature enabled",
+			"# Regeneration will only work if the plot was claimed",
+			"# with this feature enabled.",
+			"#",
+			"# You can adjust this setting for an existing world using /townyworld toggle revertunclaim",
+			"#",
 			"# Unlike the rest of this config section, the speed setting is not",
 			"# set per-world. What you set for speed will be used in all worlds.",
 			"#",
@@ -466,7 +552,7 @@ public enum ConfigNodes {
 			"1s"),
 	NWS_PLOT_MANAGEMENT_REVERT_IGNORE(
 			"new_world_settings.plot_management.revert_on_unclaim.block_ignore",
-			"ORES,LAPIS_BLOCK,GOLD_BLOCK,IRON_BLOCK,DIAMOND_BLOCK,EMERALD_BLOCK,NETHERITE_BLOCK,MOSSY_COBBLESTONE,TORCHES,SPAWNER,SIGNS,SHULKER_BOXES,BEACON,LODESTONE,RESPAWN_ANCHOR,NETHER_PORTAL,FURNACE,BLAST_FURNACE,SMOKER,BREWING_STAND,TNT,AIR,FIRE,SKULLS",
+			"ORES,LAPIS_BLOCK,GOLD_BLOCK,IRON_BLOCK,DIAMOND_BLOCK,EMERALD_BLOCK,NETHERITE_BLOCK,MOSSY_COBBLESTONE,TORCHES,SPAWNER,SIGNS,SHULKER_BOXES,BEACON,LODESTONE,RESPAWN_ANCHOR,NETHER_PORTAL,FURNACE,BLAST_FURNACE,SMOKER,BREWING_STAND,TNT,AIR,FIRE,SKULLS,DRAGON_EGG,CRYING_OBSIDIAN",
 			"",
 			"# These block types will NOT be regenerated by the revert-on-unclaim",
 			"# or revert-explosion features."),
@@ -479,15 +565,19 @@ public enum ConfigNodes {
 	NWS_PLOT_MANAGEMENT_WILD_MOB_REVERT_ENABLE(
 			"new_world_settings.plot_management.wild_revert_on_mob_explosion.enabled",
 			"true",
-			"# Enabling this will slowly regenerate holes created in the",
-			"# wilderness by monsters exploding."),
+			"",
+			"# Enabling this will slowly regenerate holes created in the wilderness by monsters exploding.",
+			"# You can adjust this setting for an existing world using /townyworld toggle revertentityexpl"),
 	NWS_PLOT_MANAGEMENT_WILD_ENTITY_REVERT_LIST(
 			"new_world_settings.plot_management.wild_revert_on_mob_explosion.entities",			
 			"CREEPER,ENDER_CRYSTAL,ENDER_DRAGON,FIREBALL,SMALL_FIREBALL,LARGE_FIREBALL,PRIMED_TNT,MINECART_TNT,WITHER,WITHER_SKULL",
+			"",
 			"# The list of entities whose explosions should be reverted."),
 	NWS_PLOT_MANAGEMENT_WILD_MOB_REVERT_TIME(
 			"new_world_settings.plot_management.wild_revert_on_mob_explosion.delay",
-			"20s"),
+			"20s",
+			"",
+			"# How long before an entity-caused explosion begins reverting."),
 	NWS_PLOT_MANAGEMENT_WILD_BLOCK_REVERT_HEADER(
 			"new_world_settings.plot_management.wild_revert_on_block_explosion",
 			"",
@@ -496,11 +586,13 @@ public enum ConfigNodes {
 	NWS_PLOT_MANAGEMENT_WILD_BLOCK_REVERT_ENABLE(
 			"new_world_settings.plot_management.wild_revert_on_block_explosion.enabled",
 			"true",
-			"# Enabling this will slowly regenerate holes created in the",
-			"# wilderness by exploding blocks like beds."),
+			"",
+			"# Enabling this will slowly regenerate holes created in the wilderness by exploding blocks like beds.",
+			"# You can adjust this setting for an existing world using /townyworld toggle revertblockexpl"),
 	NWS_PLOT_MANAGEMENT_WILD_BLOCK_REVERT_LIST(
 			"new_world_settings.plot_management.wild_revert_on_block_explosion.blocks",
 			"BEDS,RESPAWN_ANCHOR",
+			"",
 			"# The list of blocks whose explosions should be reverted."),
 	NWS_PLOT_MANAGEMENT_WILD_REVERT_BLOCK_WHITELIST(
 		"new_world_settings.plot_management.wild_revert_on_explosion_block_whitelist",
@@ -590,6 +682,18 @@ public enum ConfigNodes {
 			"false",
 			"",
 			"# When set to true both nation and ally spawn travel will also require the target town to have their status set to public."),
+	GTOWN_SETTINGS_IS_TRUSTED_RESIDENTS_COUNT_AS_RESIDENTS(
+			"global_town_settings.do_trusted_residents_count_as_residents",
+			"false",
+			"",
+			"# When set to true, a player that is trusted by a town is allowed to spawn to the town as if they were a resident.",
+			"# Allows allows the residents of entire an town when that town is trusted by the town."),
+	GTOWN_SETTINGS_IS_NEW_RESIDENT_PROMPTED_TO_SPAWN(
+			"global_town_settings.are_new_residents_prompted_to_town_spawn",
+			"false",
+			"",
+			"# When a resident joins a town, should they be prompted to use spawn to the town?",
+			"# This requires them to not already be standing in the town, and also to be able to use /t spawn and whatever costs may be associated with it."),
 	GTOWN_SETTINGS_SPAWN_TIMER(
 			"global_town_settings.teleport_warmup_time",
 			"0",
@@ -649,7 +753,17 @@ public enum ConfigNodes {
 			"30",
 			"",
 			"# Number of seconds that must pass before peacfulness can be toggled by a town or nation."),
-
+	GTOWN_SETTINGS_TOWN_DELETE_COOLDOWN_TIMER(
+			"global_town_settings.town_delete_cooldown_time",
+			"0",
+			"",
+			"# Number of seconds that must pass before a player that has deleted their town can create a new one."),
+	GTOWN_SETTINGS_TOWN_UNCLAIM_COOLDOWN_TIMER(
+			"global_town_settings.town_unclaim_cooldown_time",
+			"0",
+			"",
+			"# Number of seconds that must pass before a town that has unclaimed a townblock can claim it again."),
+	
 	GTOWN_SETTINGS_TOWN_RESPAWN(
 			"global_town_settings.town_respawn",
 			"false",
@@ -760,6 +874,11 @@ public enum ConfigNodes {
 			"somecommandhere,othercommandhere",
 			"",
 			"# Commands an outlawed player cannot use while in the town they are outlawed in."),
+	GTOWN_SETTINGS_WAR_BLACKLISTED_COMMANDS(
+			"global_town_settings.war_blacklisted_commands",
+			"somecommandhere,othercommandhere",
+			"",
+			"# Commands that cannot be run by players who have an active war."),
 	GTOWN_SETTINGS_MAX_NUMBER_RESIDENTS_WITHOUT_NATION(
 			"global_town_settings.maximum_number_residents_without_nation",
 			"0",
@@ -820,6 +939,13 @@ public enum ConfigNodes {
 			"true",
 			"",
 			"# If Towny should show players the townboard when they login"
+	),
+	GTOWN_SETTINGS_OUTSIDERS_PREVENT_UNCLAIM_TOWNBLOCK(
+			"global_town_settings.outsiders_prevent_unclaim_townblock",
+			"false",
+			"",
+			"# If set to true, Towny will prevent a townblock from being unclaimed while an outsider is within the townblock's boundaries.",
+			"# When active this feature can cause a bit of lag when the /t unclaim command is used, depending on how many players are online."
 	),
 	GTOWN_SETTINGS_OUTSIDERS_PREVENT_PVP_TOGGLE(
 			"global_town_settings.outsiders_prevent_pvp_toggle",
@@ -1099,6 +1225,13 @@ public enum ConfigNodes {
 			"",
 			"# If higher than 0, it will limit how many towns can be joined into a nation.",
 			"# Does not affect existing nations that are already over the limit."),
+    GNATION_SETTINGS_MAX_RESIDENTS_PER_NATION(
+            "global_nation_settings.max_residents_per_nation",
+            "0",
+            "",
+            "# If higher than 0, it will limit how many residents can join a nation.",
+            "# Does not affect existing nations that are already over the limit."
+            ),
 	GNATION_SETTINGS_ALLOWED_NATION_COLORS(
 			"global_nation_settings.allowed_map_colors",
 			"aqua:00ffff, azure:f0ffff, beige:f5f5dc, black:000000, blue:0000ff, brown:a52a2a, cyan:00ffff, darkblue:00008b, darkcyan:008b8b, darkgrey:a9a9a9, darkgreen:006400, darkkhaki:bdb76b, darkmagenta:8b008b, darkolivegreen:556b2f, darkorange:ff8c00, darkorchid:9932cc, darkred:8b0000, darksalmon:e9967a, darkviolet:9400d3, fuchsia:ff00ff, gold:ffd700, green:008000, indigo:4b0082, khaki:f0e68c, lightblue:add8e6, lightcyan:e0ffff, lightgreen:90ee90, lightgrey:d3d3d3, lightpink:ffb6c1, lightyellow:ffffe0, lime:00ff00, magenta:ff00ff, maroon:800000, navy:000080, olive:808000, orange:ffa500, pink:ffc0cb, purple:800080, violet:800080, red:ff0000, silver:c0c0c0, white:ffffff, yellow:ffff00",
@@ -1156,11 +1289,6 @@ public enum ConfigNodes {
 			"plugin.interfacing.tekkit.fake_residents",
 			"[IndustrialCraft],[BuildCraft],[Redpower],[Forestry],[Turtle]",
 			"# Add any fake players for client/server mods (aka Tekkit) here"),
-	PLUGIN_USING_ESSENTIALS(
-			"plugin.interfacing.using_essentials",
-			"false",
-			"",
-			"# Enable using_essentials if you are using cooldowns in essentials for teleports."),
 	PLUGIN_USING_ECONOMY(
 			"plugin.interfacing.using_economy",
 			"true",
@@ -1516,6 +1644,18 @@ public enum ConfigNodes {
 			"# PigZombie, Sheep, Skeleton, Slime, Spider, Squid, WaterMob, Wolf, Zombie",
 			"",
 			"# Protect living entities within a town's boundaries from being killed by players or mobs."),
+	PROT_MOB_TYPES_BOAT_THEFT(
+			"protection.mob_types_protected_from_boat_theft",
+			"false",
+			"",
+			"# When set to true, the above mob_types will be protected when they are in a town, from being able to enter empty boats.",
+			"# This protects the mobs from being stolen using boats."),
+	PROT_MOB_TYPES_MOB_VS_MOB_BYPASS(
+			"protection.are_mob_types_protected_against_mobs",
+			"true",
+			"",
+			"# Setting this to false will allow non-player entities to harm the above protected mobs.",
+			"# This would include withers damaging protected mobs, and can be quite harmful."),
 	PROT_POTION_TYPES(
 			"protection.potion_types",
 			"BLINDNESS,CONFUSION,HARM,HUNGER,POISON,SLOW,SLOW_DIGGING,WEAKNESS,WITHER",
@@ -1703,6 +1843,21 @@ public enum ConfigNodes {
 			"15",
 			"",
 		    "# This settings sets the duration the actionbar (The text above the inventory bar) or the bossbar lasts in seconds"),
+	NOTIFICATION_BOSSBARS_HEADER("notification.bossbars", "", ""),
+	NOTIFICATION_BOSSBARS_COLOR("notification.bossbars.color",
+			"white",
+			"",
+			"# The color to use for bossbar notifications.",
+			"# Valid colors are blue, green, pink, purple, red, white, or yellow."),
+	NOTIFICATION_BOSSBARS_OVERLAY("notification.bossbars.overlay",
+			"progress",
+			"",
+			"# The overlay to use for bossbar notifications.",
+			"# Valid options are progress, notched_6, notched_10, notched_12, notched_20"),
+	NOTIFICATION_BOSSBARS_PROGRESS("notification.bossbars.progress",
+			"0",
+			"",
+			"# The progress to use for the bossbar, between 0 and 1."),
 	FLAGS_DEFAULT(
 			"default_perm_flags",
 			"",
@@ -1930,6 +2085,11 @@ public enum ConfigNodes {
 			"false",
 			"",
 			"# When true only residents who have no town will be deleted."),
+	RES_SETTINGS_DELETE_OLD_RESIDENTS_REMOVE_TOWN_ONLY(
+			"resident_settings.delete_old_residents.only_remove_town",
+			"false",
+			"",
+			"# When true players will be removed from their town and become a nomad instead of being fully deleted."),
 	RES_SETTING_DEFAULT_TOWN_NAME(
 			"resident_settings.default_town_name",
 			"",
@@ -1989,6 +2149,16 @@ public enum ConfigNodes {
 			"0",
 			"",
 			"# The cost of renaming a nation."),
+	ECO_TOWN_MAPCOLOUR_COST(
+			"economy.town_set_mapcolour_cost",
+			"0",
+			"",
+			"# The cost of setting a town's mapcolour."),
+	ECO_NATION_MAPCOLOUR_COST(
+			"economy.nation_set_mapcolour_cost",
+			"0",
+			"",
+			"# The cost of setting a nation's mapcolour."),
 	ECO_SPAWN_TRAVEL("economy.spawn_travel", "", ""),
 	ECO_PRICE_TOWN_SPAWN_TRAVEL(
 			"economy.spawn_travel.price_town_spawn_travel",
@@ -2028,14 +2198,28 @@ public enum ConfigNodes {
 			"100.0",
 			"",
 			"# The daily upkeep to remain neutral, paid by the Nation bank. If unable to pay, neutral/peaceful status is lost.",
+			"# This cost is multiplied by the nation_level peacefulCostMultiplier.",
 			"# Neutrality will exclude you from a war event, as well as deterring enemies."),
+	ECO_PRICE_NATION_NEUTRALITY_CHARGES_PER_TOWN(
+			"economy.price_nation_neutrality_charges_per_town",
+			"false",
+			"",
+			"# When it is true, the peaceful cost is multiplied by the nation's number of towns.",
+			"# Note that the base peacful cost is calculated by the price_nation_neutrality X nation_level peacefulCostMultiplier."),
+
 	ECO_PRICE_TOWN_NEUTRALITY(
 			"economy.price_town_neutrality",
 			"25.0",
 			"",
-			"# The daily upkeep to remain neutral, paid by the Town bank. If unable to pay, neutral/peaceful status is lost."),
+			"# The daily upkeep to remain neutral, paid by the Town bank. If unable to pay, neutral/peaceful status is lost.",
+			"# This cost is multiplied by the town_level peacefulCostMultiplier."),
+	ECO_PRICE_TOWN_NEUTRALITY_CHARGES_PER_PLOT(
+			"economy.price_town_neutrality_charges_per_plot",
+			"false",
+			"",
+			"# When it is true, the peaceful cost is multiplied by the town's number of claimed townblocks.",
+			"# Note that the base peacful cost is calculated by the price_town_neutrality X town_level peacefulCostMultiplier."),
 
-	
 	ECO_NEW_EXPAND("economy.new_expand", "", ""),
 	ECO_PRICE_NEW_NATION(
 			"economy.new_expand.price_new_nation",
@@ -2092,6 +2276,12 @@ public enum ConfigNodes {
 			"# Warning: do not set this higher than the cost to claim a townblock.",
 			"# It is advised that you do not set this to the same price as claiming either, otherwise towns will get around using outposts to claim far away.",
 			"# Optionally, set this to a negative amount if you want towns to pay money to unclaim their land."),
+	ECO_PRICE_TAKEOVERCLAIM("economy.takeoverclaim","","",""),
+	ECO_PRICE_TAKEOVERCLAIM_PRICE(
+			"economy.takeoverclaim.price",
+			"100.0",
+			"",
+			"# The price to use /t takeoverclaim, when it has been enabled in the config at town.being_overclaimed_allows_other_towns_to_steal_land"),
 	ECO_PRICE_PURCHASED_BONUS_TOWNBLOCK(
 			"economy.new_expand.price_purchased_bonus_townblock",
 			"25.0",
@@ -2123,9 +2313,21 @@ public enum ConfigNodes {
 			"false",
 			"",
 			"# If True, only charge death prices for pvp kills. Not monsters/environmental deaths."),
-	ECO_PRICE_DEATH("economy.death.price_death", "1.0", ""),
-	ECO_PRICE_DEATH_TOWN("economy.death.price_death_town", "0.0", ""),
-	ECO_PRICE_DEATH_NATION("economy.death.price_death_nation", "0.0", ""),
+	ECO_PRICE_DEATH("economy.death.price_death",
+			"1.0",
+			"",
+			"# The price that a player pays when they die. If this is a PVP death, the amount is paid to the killer.",
+			"# Either a flat rate or a percentage according to the price_death_type setting."),
+	ECO_PRICE_DEATH_TOWN("economy.death.price_death_town",
+			"0.0",
+			"",
+			"# The price that a player's town pays when they die. If this is a PVP death, the amount is paid to the killer.",
+			"# Either a flat rate or a percentage according to the price_death_type setting."),
+	ECO_PRICE_DEATH_NATION("economy.death.price_death_nation",
+			"0.0",
+			"",
+			"# The price that a player's nation pays when they die. If this is a PVP death, the amount is paid to the killer.",
+			"# Either a flat rate or a percentage according to the price_death_type setting."),
 
 	ECO_BANK_CAP("economy.banks", "", ""),
 	ECO_BANK_CAP_TOWN(
@@ -2227,6 +2429,16 @@ public enum ConfigNodes {
 			"",
 			"# The maximum amount of money that can be taken from a balance when using a percent tax, this is the default for all new towns."
 			),
+	ECO_DAILY_TAXES_MAX_NATION_TAX_PERCENT(
+			"economy.daily_taxes.max_nation_tax_percent",
+			"25",
+			"",
+			"# Maximum tax percentage allowed when taxing by percentages for nations."),
+	ECO_DAILY_TAXES_MAX_NATION_TAX_PERCENT_AMOUNT(
+			"economy.daily_taxes.max_nation_tax_percent_amount",
+			"10000",
+			"",
+			"# The maximum amount of money that can be taken from a balance when using a percent tax, this is the default for all new nations."),
 	ECO_DAILY_TAXES_DO_CAPITALS_PAY_NATION_TAX(
 			"economy.daily_taxes.do_nation_capitals_pay_nation_tax",
 			"false",
@@ -2433,7 +2645,9 @@ public enum ConfigNodes {
 			"# |    continue owning the plot. If tax is set to 0, the | #",
 			"# |    towns' plot tax will be used instead.             | #",
 			"# | mapKey: The character that shows on the /towny map   | #",
-			"# |    commands.                                         | #",
+			"# |    commands. When using Unicode use the \\u####       | #",
+			"# |    format, and use the HTML-code version of the      | #",
+			"# |    unicode character.                                | #",
 			"# | itemUseIds: If empty, will use values defined in     | #",
 			"# |    protection.item_use_ids. If not empty this defines| #",
 			"# |    what items are considered item_use.               | #",
@@ -2463,14 +2677,12 @@ public enum ConfigNodes {
 			"jail.is_jailing_attacking_enemies",
 			"false",
 			"",
-			"# If true attacking players who die on enemy-town land will be placed into the defending town's jail if it exists.",
-			"# Requires town_respawn to be true in order to work."),
+			"# If true attacking players who die on enemy-town land will be placed into the defending town's jail if it exists."),
 	JAIL_IS_JAILING_ATTACKING_OUTLAWS(
 			"jail.is_jailing_attacking_outlaws",
 			"false",
 			"",
-			"# If true attacking players who are considered an outlaw, that are killed inside town land will be placed into the defending town's jail if it exists.",
-			"# Requires town_respawn to be true in order to work."),
+			"# If true attacking players who are considered an outlaw, that are killed inside town land will be placed into the defending town's jail if it exists."),
 	JAIL_OUTLAW_JAIL_HOURS(
 			"jail.outlaw_jail_hours",
 			"5",
@@ -2549,7 +2761,10 @@ public enum ConfigNodes {
 			"jail.is_jailbook_enabled",
 			"true",
 			"",
-			"# If false players will not be provided with a book upon being jailed."),
+			"# If false players will not be provided with a book upon being jailed.",
+			"# The jail book is a book given to people when they are jailed, which explains to them",
+			"# how they can potentially escape from jail and other jail behaviours based on the",
+			"# settings you have configured for your server."),
 	JAIL_BLACKLISTED_COMMANDS(
 			"jail.blacklisted_commands",
 			"home,spawn,teleport,tp,tpa,tphere,tpahere,back,dback,ptp,jump,kill,warp,suicide",
@@ -2571,6 +2786,12 @@ public enum ConfigNodes {
 			"1h",
 			"",
 			"# How long do new players have to be on the server before they can be jailed?"),
+	JAIL_UNJAIL_TELEPORT(
+			"jail.unjailed_players_get_teleported",
+			"true",
+			"",
+			"# Most types of unjailing result in a player being teleported when they are freed.",
+			"# Setting this to false will prevent that teleporting, resulting in the player not being teleported when they are freed."),
 	
 	BANK(
 			"bank",
@@ -2645,7 +2866,9 @@ public enum ConfigNodes {
 			"# |                                                      | #",
 			"# | Used in the ascii maps for symbols not determined by | #",
 			"# | townblocktype. See Town Block Types section for more | #",
-			"# | options.                                             | #",
+			"# | options. When using Unicode use the \\u#### format,   | #",
+			"# | and use the HTML-code version of the unicode         | #",
+			"# | character.                                           | #",
 			"# +------------------------------------------------------+ #",
 			"############################################################",
 			""),
@@ -2653,6 +2876,10 @@ public enum ConfigNodes {
 			"H",
 			"",
 			"# The character used for the home symbol."),
+	ASCII_MAP_SYMBOLS_OUTPOST("ascii_map_symbols.outpost",
+			"O",
+			"",
+			"# The character used for the outpost symbol."),
 	ASCII_MAP_SYMBOLS_FORSALE("ascii_map_symbols.forsale",
 			"$",
 			"",

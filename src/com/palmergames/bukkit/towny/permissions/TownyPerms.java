@@ -3,7 +3,6 @@ package com.palmergames.bukkit.towny.permissions;
 import com.palmergames.bukkit.config.CommentedConfiguration;
 import com.palmergames.bukkit.towny.Towny;
 import com.palmergames.bukkit.towny.TownyAPI;
-import com.palmergames.bukkit.towny.TownyUniverse;
 import com.palmergames.bukkit.towny.exceptions.initialization.TownyInitException;
 import com.palmergames.bukkit.towny.object.Nation;
 import com.palmergames.bukkit.towny.object.Resident;
@@ -20,20 +19,27 @@ import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * @author ElgarL
@@ -41,26 +47,30 @@ import java.util.Set;
  */
 public class TownyPerms {
 
-	protected static LinkedHashMap<String, Permission> registeredPermissions = new LinkedHashMap<>();
-	protected static HashMap<String, PermissionAttachment> attachments = new HashMap<>();
-	private static HashMap<String, List<String>> groupPermsMap = new HashMap<>();
+	protected static final LinkedHashMap<String, Permission> registeredPermissions = new LinkedHashMap<>();
+	protected static final HashMap<String, PermissionAttachment> attachments = new HashMap<>();
+	private static final HashMap<String, List<String>> groupPermsMap = new HashMap<>();
 	private static CommentedConfiguration perms;
 	private static Towny plugin;
-	private static List<String> vitalGroups = new ArrayList<>(Arrays.asList("nomad","towns.default","towns.mayor","towns.ranks","nations.default","nations.king","nations.ranks"));
+	private static final List<String> vitalGroups = Arrays.asList("nomad","towns.default","towns.mayor","towns.ranks","nations.default","nations.king","nations.ranks");
+	private static final HashMap<UUID, String> residentPrefixMap = new HashMap<>();
+	private static final String RANKPRIORITY_PREFIX = "towny.rankpriority.";
+	private static final String RANKPREFIX_PREFIX = "towny.rankprefix.";
 	
 	public static void initialize(Towny plugin) {
 		TownyPerms.plugin = plugin;
 	}
 	
-	private static Field permissions;
+	private static final MethodHandle permissions;
 
 	// Setup reflection (Thanks to Codename_B for the reflection source)
 	static {
 		try {
-			permissions = PermissionAttachment.class.getDeclaredField("permissions");
-			permissions.setAccessible(true);
-		} catch (SecurityException | NoSuchFieldException e) {
-			e.printStackTrace();
+			Field permissionsField = PermissionAttachment.class.getDeclaredField("permissions");
+			permissionsField.setAccessible(true);
+			permissions = MethodHandles.lookup().unreflectGetter(permissionsField);
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException(e);
 		}
 	}
 
@@ -129,18 +139,15 @@ public class TownyPerms {
 	 */
 	public static void assignPermissions(Resident resident, Player player) {
 
-		PermissionAttachment playersAttachment;
-		TownyUniverse townyUniverse = TownyUniverse.getInstance();
-
 		if (resident == null) {
 			if (player != null)
-				resident = townyUniverse.getResident(player.getUniqueId());
+				resident = TownyAPI.getInstance().getResident(player);
 
 			// failed to get resident
 			if (resident == null)
 				return;
 		} else {
-			player = BukkitTools.getPlayer(resident.getName());
+			player = resident.getPlayer();
 		}
 
 		/*
@@ -148,24 +155,17 @@ public class TownyPerms {
 		 * online)
 		 */
 
-		if ((player == null) || !player.isOnline()) {
+		if (player == null || !player.isOnline()) {
 			attachments.remove(resident.getName());
 			return;
 		}
 
-		TownyWorld world = TownyAPI.getInstance().getTownyWorld(player.getWorld().getName());
+		final TownyWorld world = TownyAPI.getInstance().getTownyWorld(player.getWorld());
 		if (world == null)
 			return;
 
-		if (attachments.containsKey(resident.getName()))
-			playersAttachment = attachments.get(resident.getName());
-		else
-			// DungeonsXL sometimes moves players which aren't online out of dungeon worlds causing an error in the log to appear.
-			try {
-				playersAttachment = BukkitTools.getPlayer(resident.getName()).addAttachment(plugin);
-			} catch (Exception e) {
-				return;
-			}
+		final Player finalPlayer = player;
+		final PermissionAttachment attachment = attachments.computeIfAbsent(resident.getName(), k -> finalPlayer.addAttachment(plugin));
 
 		/*
 		 * Set all our Towny default permissions using reflection else bukkit
@@ -173,36 +173,37 @@ public class TownyPerms {
 		 */
 
 		try {
-			synchronized (playersAttachment) {
-				@SuppressWarnings("unchecked")
-				Map<String, Boolean> orig = (Map<String, Boolean>) permissions.get(playersAttachment);
-				/*
-				 * Clear the map (faster than removing the attachment and
-				 * recalculating)
-				 */
-				orig.clear();
+			final Map<String, Boolean> orig = (Map<String, Boolean>) permissions.invoke(attachment);
+			/*
+			 * Clear the map (faster than removing the attachment and
+			 * recalculating)
+			*/
+			orig.clear();
 
-				if (world.isUsingTowny()) {
-					/*
-					 * Fill with the fresh perm nodes
-					 */
-					orig.putAll(TownyPerms.getResidentPerms(resident));
-
-					// System.out.print("Perms set for: " + resident.getName());
-				}
+			if (world.isUsingTowny()) {
 				/*
-				 * Tell bukkit to update it's permissions
-				 */
-				playersAttachment.getPermissible().recalculatePermissions();
+				 * Fill with the fresh perm nodes
+			     */
+				orig.putAll(TownyPerms.getResidentPerms(resident));
 			}
-		} catch (IllegalArgumentException | IllegalAccessException e) {
+			
+			/*
+			 * Tell bukkit to update it's permissions
+			*/
+			player.recalculatePermissions();
+		} catch (final Throwable e) {
 			e.printStackTrace();
 		}
 		
 		/*
 		 * Store the attachment for future reference
 		 */
-		attachments.put(resident.getName(), playersAttachment);
+		attachments.put(resident.getName(), attachment);
+
+		/*
+		 * Set a prefix for the resident ranks.
+		 */
+		setResidentPrimaryRankPrefix(resident);
 
 	}
 	
@@ -259,14 +260,14 @@ public class TownyPerms {
 	 * Fetch a list of permission nodes
 	 * 
 	 * @param path - path to permission nodes
-	 * @return a List of permission nodes.
+	 * @return a List of permission nodes or an empty list.
 	 */
 	private static List<String> getList(String path) {
 
 		if (perms.contains(path)) {
 			return perms.getStringList(path);
 		}
-		return null;
+		return new ArrayList<>();
 	}
 	
 	/**
@@ -281,7 +282,7 @@ public class TownyPerms {
 		
 		//Check for town membership
 		if (resident.hasTown()) {
-			permList.addAll(getTownDefault(resident.getTownOrNull()));
+			permList.addAll(getTownDefault(getTownName(resident)));
 			
 			// Is Mayor?
 			if (resident.isMayor()) permList.addAll(getTownMayor());
@@ -293,7 +294,7 @@ public class TownyPerms {
 			
 			//Check for nation membership
 			if (resident.hasNation()) {
-				permList.addAll(getNationDefault());
+				permList.addAll(getNationDefault(getNationName(resident)));
 				// Is King?
 				if (resident.isKing()) permList.addAll(getNationKing());
 							
@@ -301,9 +302,16 @@ public class TownyPerms {
 				for (String rank: resident.getNationRanks()) {
 					permList.addAll(getNationRankPermissions(rank));
 				}
+			} else {
+				permList.add("towny.nationless");
 			}
+			
+			if (isPeaceful(resident.getTownOrNull()))
+				permList.addAll(getList("peaceful"));
+				
 		} else {
 			permList.add("towny.townless");
+			permList.add("towny.nationless");
 		}
 		
 		List<String> playerPermArray = sort(new ArrayList<String>(permList));
@@ -313,12 +321,12 @@ public class TownyPerms {
 		for (String permission : playerPermArray) {			
 			if (permission.contains("{townname}")) {
 				if (resident.hasTown()) {
-					String placeholderPerm = permission.replace("{townname}", resident.getTownOrNull().getName().toLowerCase());
+					String placeholderPerm = permission.replace("{townname}", getTownName(resident));
 					newPerms.put(placeholderPerm, true);
 				}
 			} else if (permission.contains("{nationname}")) {
 				if (resident.hasNation()) {
-					String placeholderPerm = permission.replace("{nationname}", resident.getTownOrNull().getNationOrNull().getName().toLowerCase());
+					String placeholderPerm = permission.replace("{nationname}", getNationName(resident));
 					newPerms.put(placeholderPerm, true);
 				}
 			} else {
@@ -329,7 +337,7 @@ public class TownyPerms {
 		return newPerms;
 		
 	}
-	
+
 	public static void registerPermissionNodes() {
 		
 		 plugin.getServer().getScheduler().scheduleSyncDelayedTask(plugin, new
@@ -357,7 +365,7 @@ public class TownyPerms {
 				for (String rank : getNationRanks()) {
 					perm = new
 					Permission(PermissionNodes.TOWNY_COMMAND_NATION_RANK.getNode(rank),
-					"User can grant this town rank to others..",
+					"User can grant this nation rank to others..",
 					PermissionDefault.FALSE, null);
 					perm.addParent(PermissionNodes.TOWNY_COMMAND_NATION_RANK.getNode(), true);
 				}
@@ -377,8 +385,7 @@ public class TownyPerms {
 	 */
 	public static List<String> getDefault() {
 
-		List<String> permsList = getList("nomad");
-		return (permsList == null)? new ArrayList<String>() : permsList;
+		return getList("nomad");
 	}
 
 	/*
@@ -398,20 +405,14 @@ public class TownyPerms {
 	/**
 	 * Default permissions everyone in a town gets
 	 * 
-	 * @param town - Town to target
+	 * @param townName Name of town lowercased.
 	 * @return a list of permissions
 	 */
-	public static List<String> getTownDefault(Town town) {
+	public static List<String> getTownDefault(String townName) {
 
 		List<String> permsList = getList("towns.default");
-		if ((permsList == null)) {
-			List<String> emptyPermsList = new ArrayList<String>();
-			emptyPermsList.add("towny.town." + town.getName().toLowerCase());
-			return emptyPermsList;
-		} else {
-			permsList.add("towny.town." + town.getName().toLowerCase());
-			return permsList;
-		}
+		permsList.add("towny.town." + townName);
+		return permsList;
 	}
 
 	/**
@@ -421,22 +422,9 @@ public class TownyPerms {
 	 */
 	public static List<String> getTownMayor() {
 
-		List<String> permsList = getList("towns.mayor");
-		return (permsList == null)? new ArrayList<String>() : permsList;
+		return getList("towns.mayor");
 	}
 
-	/**
-	 * Get a specific ranks permissions
-	 * 
-	 * @param rank - Rank to check permissions for
-	 * @return a List of permissions
-	 * @deprecated since 0.97.5.5 use {@link #getTownRankPermissions(String)}
-	 */
-	@Deprecated
-	public static List<String> getTownRank(String rank) {
-		return getTownRankPermissions(rank);
-	}
-	
 	/**
 	 * Get a specific ranks permissions
 	 * 
@@ -445,8 +433,7 @@ public class TownyPerms {
 	 */
 	public static List<String> getTownRankPermissions(String rank) {
 
-		List<String> permsList = getList("towns.ranks." + rank);//.toLowerCase());
-		return (permsList == null)? new ArrayList<String>() : permsList;
+		return getList("towns.ranks." + rank);//.toLowerCase());
 	}
 
 	/*
@@ -466,12 +453,14 @@ public class TownyPerms {
 	/**
 	 * Default permissions everyone in a nation gets
 	 * 
+	 * @param nationName Name of nation lowercased.
 	 * @return a List of permissions
 	 */
-	public static List<String> getNationDefault() {
+	public static List<String> getNationDefault(String nationName) {
 
 		List<String> permsList = getList("nations.default");
-		return (permsList == null)? new ArrayList<String>() : permsList;
+		permsList.add("towny.nation." + nationName);
+		return permsList;
 	}
 
 	/**
@@ -481,20 +470,7 @@ public class TownyPerms {
 	 */
 	public static List<String> getNationKing() {
 
-		List<String> permsList = getList("nations.king");
-		return (permsList == null)? new ArrayList<String>() : permsList;
-	}
-
-	/**
-	 * Get a specific ranks permissions
-	 * 
-	 * @param rank - Rank to get permissions of
-	 * @return a List of Permissions
-	 * @deprecated since 0.97.5.5 use {@link #getNationRankPermissions(String)}
-	 */
-	@Deprecated
-	public static List<String> getNationRank(String rank) {
-		return getNationRankPermissions(rank);
+		return getList("nations.king");
 	}
 	
 	/**
@@ -505,8 +481,7 @@ public class TownyPerms {
 	 */
 	public static List<String> getNationRankPermissions(String rank) {
 
-		List<String> permsList = getList("nations.ranks." + rank);//.toLowerCase());
-		return (permsList == null)? new ArrayList<String>() : permsList;
+		return getList("nations.ranks." + rank);//.toLowerCase());
 	}
 	
 	/**
@@ -537,7 +512,94 @@ public class TownyPerms {
 		return null;
 	}
 
-	
+	private static String getTownName(Resident resident) {
+		return resident.getTownOrNull().getName().toLowerCase(Locale.ROOT);
+	}
+
+	private static String getNationName(Resident resident) {
+		return resident.getNationOrNull().getName().toLowerCase(Locale.ROOT);
+	}
+
+	private static boolean isPeaceful(Town town) {
+		return town.isNeutral() || (town.hasNation() && town.getNationOrNull().isNeutral()); 
+	}
+
+	public static boolean hasPeacefulNodes() {
+		return !getList("peaceful").isEmpty();
+	}
+
+	/*
+	 * Resident Primary Rank / Rank Prefix 
+	 */
+	public static String getResidentPrimaryRankPrefix(Resident resident) {
+		return residentPrefixMap.getOrDefault(resident.getUUID(), setResidentPrimaryRankPrefix(resident));
+	}
+
+	private static String setResidentPrimaryRankPrefix(Resident resident) {
+		String prefix = getPrimaryRankPrefix(resident);
+		residentPrefixMap.put(resident.getUUID(), prefix);
+		return prefix;
+	}
+
+
+	private static String getPrimaryRankPrefix(Resident resident) {
+		String prefix = getHighestPriorityRankPrefix(resident);
+		return prefix == null ? "" : prefix;
+	}
+
+	@Nullable
+	private static String getHighestPriorityRankPrefix(Resident resident) {
+		if (resident.hasNation() && !resident.getNationRanks().isEmpty()) {
+			String rank = getHighestPriorityRank(resident, resident.getNationRanks(), r -> getNationRankPermissions(r));
+			String prefix = getPrefixFromRank(getNationRankPermissions(rank));
+			if (prefix != null)
+				return prefix;
+		}
+
+		if (resident.hasTown() && !resident.getTownRanks().isEmpty()) {
+			String rank = getHighestPriorityRank(resident, resident.getTownRanks(), r -> getTownRankPermissions(r));
+			String prefix = getPrefixFromRank(getTownRankPermissions(rank));
+			if (prefix != null)
+				return prefix;
+		}
+
+		return null;
+	}
+
+	private static String getPrefixFromRank(List<String> nodes) {
+		for (String node : nodes)
+			if (node.startsWith(RANKPREFIX_PREFIX))
+				return node.substring(RANKPREFIX_PREFIX.length());
+		return null;
+	}
+
+	public static String getHighestPriorityRank(Resident resident, List<String> ranks, Function<String, List<String>> rankFunction) {
+		Map<String, Integer> rankPriorityMap = new HashMap<>(); 
+		for (String rank : ranks)
+			rankPriorityMap.put(rank, getRankPriority(rankFunction.apply(rank)));
+		return Collections.max(rankPriorityMap.entrySet(), Comparator.comparingInt(Map.Entry::getValue)).getKey();
+	}
+
+	private static int getRankPriority(List<String> nodes) {
+		int topValue = 0;
+		for (String node : nodes) {
+			if (node.startsWith(RANKPRIORITY_PREFIX)) {
+				int priorityValue = getNodePriority(node);
+				if (topValue >= priorityValue)
+					continue;
+				topValue = priorityValue;
+			}
+		}
+		return topValue;
+	}
+
+	private static int getNodePriority(String node) {
+		try {
+			return Integer.valueOf(node.substring(RANKPRIORITY_PREFIX.length()));
+		} catch (NumberFormatException ignored) {
+			return 0;
+		}
+	}
 	/*
 	 * Permission utility functions taken from GroupManager (which I wrote anyway).
 	 */
@@ -688,10 +750,7 @@ public class TownyPerms {
 	}
 	
 	private static void buildGroupPermsMap() {
-		for (String key : perms.getKeys(true)) {
-			List<String> nodes = (List<String>) perms.getList(key); 
-			groupPermsMap.put(key, nodes);
-		}
+		perms.getKeys(true).stream().forEach(key -> groupPermsMap.put(key, perms.getStringList(key)));
 	}
 
 	private static void buildComments() {
@@ -714,7 +773,8 @@ public class TownyPerms {
 				"# You can add permission to a rank/group using the                                          #",
 				"# /ta townyperms group [name] addperm [node] command.                                       #",
 				"#                                                                                           #",
-				"# You may change the names of any of the ranks except: nomad, default, mayor, king, ranks.  #",
+				"# You may change the names of any of the ranks except: nomad, default, mayor, king, ranks,  #",
+				"# peaceful.                                                                                 #",
 				"#                                                                                           #",
 				"# If you want to, you can negate permissions nodes from nodes by doing the following:       #",
 				"# Ex:                                                                                       #",
@@ -722,6 +782,17 @@ public class TownyPerms {
 				"#    - -towny.command.plot.set.jail                                                         #",
 				"# In this example the user is given full rights to all of the /plot command nodes,          #",
 				"# but has had their ability to set a plot to a Jail plot type disabled.                     #",
+				"#                                                                                           #",
+				"# The towns.ranks and nations.ranks sections support adding prefix and priorities, this     #",
+				"# is done using two nodes: towny.rankpriority.# and towny.rankprefix.<prefix_here>.         #",
+				"# Residents will have their ranks parsed until one rank is determined to be the highest     #",
+				"# priority, this rank will then be searched for a prefix node. This prefix can be shown     #",
+				"# using the %townyadvanced_resident_primary_rank% placeholder for PlaceholderAPI. A prefix  #",
+				"# from a Nation rank will take precendence over a prefix from a Town rank.                  #",
+				"# Ex:                                                                                       #",
+				"#    - towny.rankpriority.100                                                               #",
+				"#    - towny.rankprefix.&a<&2Sheriff&a>                                                     #",
+				"#                                                                                           #",
 				"#############################################################################################",
 				"",
 				"",
@@ -755,6 +826,8 @@ public class TownyPerms {
 		perms.addComment("nations.default", "", "# All nation members get these permissions.");
 		
 		perms.addComment("nations.king", "", "# Kings get these permissions in addition to the default set.");
+		
+		perms.addComment("peaceful", "", "# Nodes that are given to players who are in a peaceful/neutral town or nation.");
 	}
 
 	public static CommentedConfiguration getTownyPermsFile() {

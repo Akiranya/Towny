@@ -12,8 +12,11 @@ import com.palmergames.bukkit.towny.event.PlayerEnterTownEvent;
 import com.palmergames.bukkit.towny.event.PlayerLeaveTownEvent;
 import com.palmergames.bukkit.towny.event.executors.TownyActionEventExecutor;
 import com.palmergames.bukkit.towny.event.player.PlayerDeniedBedUseEvent;
+import com.palmergames.bukkit.towny.event.player.PlayerEntersIntoTownBorderEvent;
+import com.palmergames.bukkit.towny.event.player.PlayerExitsFromTownBorderEvent;
 import com.palmergames.bukkit.towny.event.player.PlayerKeepsExperienceEvent;
 import com.palmergames.bukkit.towny.event.player.PlayerKeepsInventoryEvent;
+import com.palmergames.bukkit.towny.hooks.PluginIntegrations;
 import com.palmergames.bukkit.towny.object.CommandList;
 import com.palmergames.bukkit.towny.object.Coord;
 import com.palmergames.bukkit.towny.object.Nation;
@@ -34,6 +37,7 @@ import com.palmergames.bukkit.towny.tasks.TeleportWarmupTimerTask;
 import com.palmergames.bukkit.towny.utils.CombatUtil;
 import com.palmergames.bukkit.towny.utils.EntityTypeUtil;
 import com.palmergames.bukkit.towny.utils.JailUtil;
+import com.palmergames.bukkit.towny.utils.MinecraftVersion;
 import com.palmergames.bukkit.towny.utils.ResidentUtil;
 import com.palmergames.bukkit.util.BukkitTools;
 import com.palmergames.bukkit.util.ChatTools;
@@ -78,7 +82,11 @@ import org.bukkit.event.player.PlayerTakeLecternBookEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.metadata.MetadataValue;
+
+import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -89,6 +97,7 @@ import java.util.Map;
  * @author Shade/ElgarL
  * 
  */
+@SuppressWarnings("deprecation")
 public class TownyPlayerListener implements Listener {
 
 	private final Towny plugin;
@@ -96,6 +105,7 @@ public class TownyPlayerListener implements Listener {
 	private CommandList blockedTownCommands;
 	private CommandList blockedTouristCommands;
 	private CommandList blockedOutlawCommands;
+	private CommandList blockedWarCommands;
 	private CommandList ownPlotLimitedCommands;
 
 	public TownyPlayerListener(Towny plugin) {
@@ -155,7 +165,9 @@ public class TownyPlayerListener implements Listener {
 		Resident resident = TownyUniverse.getInstance().getResident(event.getPlayer().getUniqueId());
 		
 		if (resident != null) {
-			resident.setLastOnline(System.currentTimeMillis());
+			// Don't set last online if the player was vanished.
+			if (!event.getPlayer().getMetadata("vanished").stream().anyMatch(MetadataValue::asBoolean))
+				resident.setLastOnline(System.currentTimeMillis());
 			resident.clearModes();
 			resident.save();
 
@@ -173,7 +185,7 @@ public class TownyPlayerListener implements Listener {
 	
 	@EventHandler(priority = EventPriority.NORMAL)
 	public void onPlayerRespawn(PlayerRespawnEvent event) {
-		if (plugin.isError()) {
+		if (plugin.isError() || isEndPortalRespawn(event)) {
 			return;
 		}
 		
@@ -219,10 +231,39 @@ public class TownyPlayerListener implements Listener {
 		}
 	}
 	
+	@SuppressWarnings({"unchecked", "JavaReflectionMemberAccess"})
+	private boolean isEndPortalRespawn(PlayerRespawnEvent event) {
+		try {
+			// https://jd.papermc.io/paper/1.19/org/bukkit/event/player/PlayerRespawnEvent.html#getRespawnFlags()
+			Collection<Object> respawnFlags = (Collection<Object>) PlayerRespawnEvent.class.getDeclaredMethod("getRespawnFlags").invoke(event);
+			
+			Method name = null;
+			for (Object flag : respawnFlags) {
+				if (name == null)
+					name = flag.getClass().getMethod("name");
+				
+				if ("END_PORTAL".equals(name.invoke(flag)))
+					return true;
+			}
+			
+			return false;
+		} catch (ReflectiveOperationException e) {
+			// Spigot
+			final Player player = event.getPlayer();
+			
+			if (player.getWorld().getEnvironment() != Environment.THE_END)
+				return false;
+			
+			// Can cause a sync chunk load
+			// Check if legs or head is inside an end portal block
+			return player.getLocation().getBlock().getType() == Material.END_PORTAL || player.getEyeLocation().getBlock().getType() == Material.END_PORTAL;
+		}
+	}
+	
 	@EventHandler(priority = EventPriority.HIGHEST)
 	public void onPlayerJailRespawn(PlayerRespawnEvent event) {
 
-		if (plugin.isError() || !TownySettings.isTownRespawning()) {
+		if (plugin.isError()) {
 			return;
 		}
 	
@@ -283,6 +324,10 @@ public class TownyPlayerListener implements Listener {
 		if (!TownyAPI.getInstance().isTownyWorld(event.getPlayer().getWorld()))
 			return;
 		
+		Action action = event.getAction();
+		if(action != Action.RIGHT_CLICK_BLOCK && action != Action.RIGHT_CLICK_AIR && action != Action.PHYSICAL)
+			return;
+		
 		Player player = event.getPlayer();
 		Block clickedBlock = event.getClickedBlock();
 
@@ -314,6 +359,13 @@ public class TownyPlayerListener implements Listener {
 			 */
 			if (clickedBlock != null) {
 				Material clickedMat = clickedBlock.getType();
+
+				/* Fixes a known duping exploit. */
+				if (Tag.BEDS.isTagged(item) && Tag.CROPS.isTagged(clickedBlock.getType()) && clickedBlock.getLightLevel() == 0) {
+					event.setCancelled(true);
+					return;
+				}
+
 				/*
 				 * Test stripping logs, scraping copper blocks, dye-able signs,
 				 * glass bottles, flint&steel on TNT and shears on beehomes
@@ -364,6 +416,12 @@ public class TownyPlayerListener implements Listener {
 				if (clickedMat.name().equals("ROOTED_DIRT") && item.name().toLowerCase().contains("_hoe"))
 					event.setCancelled(!TownyActionEventExecutor.canDestroy(player, clickedBlock));
 
+				/*
+				 * Prevents players using wax on signs
+				 * TODO: Add a check for whether the sign is waxed once that API is available.
+				 */
+				if (Tag.SIGNS.isTagged(clickedMat) && item == Material.HONEYCOMB && MinecraftVersion.CURRENT_VERSION.compareTo(MinecraftVersion.MINECRAFT_1_16) >= 0)
+					event.setCancelled(!TownyActionEventExecutor.canItemuse(player, clickedBlock.getLocation(), clickedMat));
 			}
 		}
 		
@@ -392,7 +450,7 @@ public class TownyPlayerListener implements Listener {
 				ItemLists.HARVESTABLE_BERRIES.contains(clickedMat) ||
 				ItemLists.REDSTONE_INTERACTABLES.contains(clickedMat) ||
 				ItemLists.CANDLES.contains(clickedMat) ||
-				ItemLists.BOOK_CONTAINERS.contains(clickedMat) ||
+				clickedMat.name().equals("CHISELED_BOOKSHELF") ||
 				clickedMat == Material.BEACON || clickedMat == Material.DRAGON_EGG || 
 				clickedMat == Material.COMMAND_BLOCK){
 				
@@ -400,6 +458,12 @@ public class TownyPlayerListener implements Listener {
 				event.setCancelled(!TownyActionEventExecutor.canDestroy(player, clickedBlock.getLocation(), clickedMat));
 				return;
 			}
+			
+			/*
+			 * Prevents players from editing signs where they shouldn't.
+			 */
+			if (Tag.SIGNS.isTagged(clickedMat) && MinecraftVersion.CURRENT_VERSION.compareTo(MinecraftVersion.MINECRAFT_1_20) >= 0)
+				event.setCancelled(!TownyActionEventExecutor.canDestroy(player, clickedBlock.getLocation(), clickedMat));
 		}
 	}
 
@@ -421,12 +485,12 @@ public class TownyPlayerListener implements Listener {
 
 		Block block = event.getClickedBlock();
 		Player player = event.getPlayer();
-		if (event.hasBlock()) {
+		if (event.hasBlock() && event.getAction().equals(Action.RIGHT_CLICK_BLOCK)) {
 			Location blockLoc = block.getLocation();
 			/*
 			 * Catches respawn anchors blowing up and allows us to track their explosions.
 			 */
-			if (block.getType() == Material.RESPAWN_ANCHOR && event.getAction() == Action.RIGHT_CLICK_BLOCK && !block.getWorld().isRespawnAnchorWorks()) {
+			if (block.getType() == Material.RESPAWN_ANCHOR && !isRespawnAnchorWorking(block)) {
 				RespawnAnchor anchor = ((RespawnAnchor) block.getBlockData());
 				if (anchor.getCharges() > 0)
 					BukkitTools.fireEvent(new BedExplodeEvent(player, blockLoc, null, block.getType()));
@@ -446,7 +510,7 @@ public class TownyPlayerListener implements Listener {
 			 * Prevents setting the spawn point of the player using beds or respawn anchors, 
 			 * except in allowed plots (personally-owned and Inns)
 			 */
-			if (TownySettings.getBedUse() && event.getAction() == Action.RIGHT_CLICK_BLOCK
+			if (TownySettings.getBedUse() 
 				&& (Tag.BEDS.isTagged(block.getType()) || disallowedAnchorClick(event, block))) {
 
 				boolean isOwner = false;
@@ -486,6 +550,18 @@ public class TownyPlayerListener implements Listener {
 		}
 	}
 
+	private boolean isRespawnAnchorWorking(Block block) {
+		boolean allowedInWorld = false;
+		try {
+			allowedInWorld = block.getWorld().isRespawnAnchorWorks();
+		} catch (NoSuchMethodError ignored) {
+			// Pre-1.18 versions of the Bukkit API do not have an isRespawnAnchorWorks() method.
+			// TODO: Drop this when Towny no longer supports earlier than MC 1.18.
+			allowedInWorld = block.getWorld().getEnvironment().equals(Environment.NETHER);
+		}
+		return allowedInWorld;
+	}
+
 	/*
 	 * This method will stop a player Right Clicking on a respawn anchor if:
 	 * - The world is an anchor-allowed world (the nether) and,
@@ -494,7 +570,7 @@ public class TownyPlayerListener implements Listener {
 	 * - The Item in their hand is nothing or (not-glowstone or the charges are full.) 
 	 */
 	private boolean disallowedAnchorClick(PlayerInteractEvent event, Block block) {
-		return block.getWorld().getEnvironment().equals(Environment.NETHER)
+		return isRespawnAnchorWorking(block)
 			&& block.getBlockData() instanceof RespawnAnchor anchor 
 			&& anchor.getCharges() > 0 
 			&& (event.getItem() == null || (event.getItem().getType() != Material.GLOWSTONE || anchor.getCharges() >= anchor.getMaximumCharges()));
@@ -653,7 +729,7 @@ public class TownyPlayerListener implements Listener {
 	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
 	public void onPlayerMove(PlayerMoveEvent event) {
 		// Let's ignore Citizens NPCs
-		if (BukkitTools.checkCitizens(event.getPlayer()))
+		if (PluginIntegrations.getInstance().checkCitizens(event.getPlayer()))
 			return;
 		
 		if (plugin.isError()) {
@@ -693,15 +769,15 @@ public class TownyPlayerListener implements Listener {
 		
 		if (WorldCoord.cellChanged(from, to)) {
 
-			TownyWorld fromWorld = TownyAPI.getInstance().getTownyWorld(from.getWorld().getName());				
-			TownyWorld toWorld = TownyAPI.getInstance().getTownyWorld(to.getWorld().getName());
+			TownyWorld fromWorld = TownyAPI.getInstance().getTownyWorld(from.getWorld());				
+			TownyWorld toWorld = TownyAPI.getInstance().getTownyWorld(to.getWorld());
 			if (fromWorld == null || toWorld == null) {
 				TownyMessaging.sendErrorMsg(player, Translatable.of("not_registered"));
 				cache.setLastLocation(to);
 				return;
 			}
-			WorldCoord fromCoord = new WorldCoord(fromWorld.getName(), Coord.parseCoord(from));
-			WorldCoord toCoord = new WorldCoord(toWorld.getName(), Coord.parseCoord(to));
+			WorldCoord fromCoord = new WorldCoord(fromWorld.getName(), fromWorld.getUUID(), Coord.parseCoord(from));
+			WorldCoord toCoord = new WorldCoord(toWorld.getName(), fromWorld.getUUID(), Coord.parseCoord(to));
 			
 			onPlayerMoveChunk(player, fromCoord, toCoord, from, to, event);
 		}
@@ -715,7 +791,7 @@ public class TownyPlayerListener implements Listener {
 		// Let's ignore Citizens NPCs. This must come before the safemode check, as Citizens stores their NPCs
 		// at the world spawn until a player loads a chunk, to which the NPC is then teleported. Towny would
 		// prevent them teleporting, leaving them at spawn even after Safe Mode is cleaned up.
-		if (BukkitTools.checkCitizens(event.getPlayer()))
+		if (PluginIntegrations.getInstance().checkCitizens(event.getPlayer()))
 			return;
 		
 		if (plugin.isError()) {
@@ -819,7 +895,7 @@ public class TownyPlayerListener implements Listener {
 			
 			// Caught players are tested for pvp at the location of the catch.
 			if (caught.getType().equals(EntityType.PLAYER)) {
-				TownyWorld world = TownyAPI.getInstance().getTownyWorld(event.getCaught().getWorld().getName());
+				TownyWorld world = TownyAPI.getInstance().getTownyWorld(event.getCaught().getWorld());
 				if (world == null)
 					return;
 
@@ -861,18 +937,25 @@ public class TownyPlayerListener implements Listener {
 		if (to.isWilderness() && from.isWilderness()) 
 			// Both are wilderness, no event will fire.
 			return;
-		if (to.isWilderness())
+		if (to.isWilderness()) {
 			// Gone from a Town into the wilderness.
+			BukkitTools.fireEvent(new PlayerExitsFromTownBorderEvent(event.getPlayer(), to, from, from.getTownOrNull(), event.getMoveEvent()));
+			// Old event which will be removed later on.
 			BukkitTools.fireEvent(new PlayerLeaveTownEvent(event.getPlayer(), to, from, from.getTownOrNull(), event.getMoveEvent()));
-		else if (from.isWilderness())
+		} else if (from.isWilderness()) {
 			// Gone from wilderness into Town.
+			BukkitTools.fireEvent(new PlayerEntersIntoTownBorderEvent(event.getPlayer(), to, from, to.getTownOrNull(), event.getMoveEvent()));
+			// Old event which will be removed later on.
 			BukkitTools.fireEvent(new PlayerEnterTownEvent(event.getPlayer(), to, from, to.getTownOrNull(), event.getMoveEvent()));
 		// Both to and from have towns.
-		else if (to.getTownOrNull().equals(from.getTownOrNull()))
+		} else if (to.getTownOrNull().equals(from.getTownOrNull())) {
 			// The towns are the same, no event will fire.
 			return;
-		else {
+		} else {
 			// Player has left one Town and immediately entered a different one.
+			BukkitTools.fireEvent(new PlayerEntersIntoTownBorderEvent(event.getPlayer(), to, from, to.getTownOrNull(), event.getMoveEvent()));
+			BukkitTools.fireEvent(new PlayerExitsFromTownBorderEvent(event.getPlayer(), to, from, from.getTownOrNull(), event.getMoveEvent()));
+			// Old events which will be removed later on.
 			BukkitTools.fireEvent(new PlayerEnterTownEvent(event.getPlayer(), to, from, to.getTownOrNull(), event.getMoveEvent()));
 			BukkitTools.fireEvent(new PlayerLeaveTownEvent(event.getPlayer(), to, from, from.getTownOrNull(), event.getMoveEvent()));
 		}
@@ -883,14 +966,14 @@ public class TownyPlayerListener implements Listener {
 	 * - Handles outlaws entering a town they are outlawed in.
 	 */
 	@EventHandler(priority = EventPriority.NORMAL)
-	public void onOutlawEnterTown(PlayerEnterTownEvent event) {
+	public void onOutlawEnterTown(PlayerEntersIntoTownBorderEvent event) {
 
 		Resident outlaw = TownyUniverse.getInstance().getResident(event.getPlayer().getUniqueId());
 		
 		if (outlaw == null)
 			return;
 		
-		Town town = event.getEnteredtown();
+		Town town = event.getEnteredTown();
 
 		if (outlaw.isJailed() && outlaw.getJailTown().equals(town))
 			return;
@@ -968,10 +1051,10 @@ public class TownyPlayerListener implements Listener {
 	 * @param event - PlayerEnterTownEvent
 	 */
 	@EventHandler(priority = EventPriority.NORMAL)
-	public void onPlayerEnterTown(PlayerEnterTownEvent event) {
+	public void onPlayerEnterTown(PlayerEntersIntoTownBorderEvent event) {
 		
 		Resident resident = TownyUniverse.getInstance().getResident(event.getPlayer().getUniqueId());
-		Town town = event.getEnteredtown();
+		Town town = event.getEnteredTown();
 		
 		if (resident != null && resident.isSeeingBorderTitles() && town != null && TownySettings.isNotificationUsingTitles()) {
 			String title = ChatColor.translateAlternateColorCodes('&', TownySettings.getNotificationTitlesTownTitle());
@@ -982,15 +1065,14 @@ public class TownyPlayerListener implements Listener {
 			placeholders.put("{town_motd}", town.getBoard());
 			placeholders.put("{town_residents}", town.getNumResidents());
 			placeholders.put("{town_residents_online}", TownyAPI.getInstance().getOnlinePlayers(town).size());
-			if (town.hasNation()) {
-				Nation nation = town.getNationOrNull();
-				placeholders.put("{nationname}", String.format(TownySettings.getNotificationTitlesNationNameFormat(), nation.getName()));
-				placeholders.put("{nation_residents}", nation.getNumResidents());
-				placeholders.put("{nation_residents_online}", TownyAPI.getInstance().getOnlinePlayers(nation).size());
-				placeholders.put("{nation_motd}", nation.getBoard());
-				if (town.isCapital()) 
-					placeholders.put("{nationcapital}", getCapitalSlug(town.getName(), nation.getName()));
-			}
+
+			Nation nation = town.getNationOrNull();
+			placeholders.put("{nationname}", nation == null ? "" : String.format(TownySettings.getNotificationTitlesNationNameFormat(), nation.getName()));
+			placeholders.put("{nation_residents}", nation == null ? "" : nation.getNumResidents());
+			placeholders.put("{nation_residents_online}", nation == null ? "" : TownyAPI.getInstance().getOnlinePlayers(nation).size());
+			placeholders.put("{nation_motd}", nation == null ? "" : nation.getBoard());
+			placeholders.put("{nationcapital}", !town.isCapital() ? "" : getCapitalSlug(town.getName(), nation.getName()));
+
 			for(Map.Entry<String, Object> placeholder: placeholders.entrySet()) {
 				title = title.replace(placeholder.getKey(), placeholder.getValue().toString());
 				subtitle = subtitle.replace(placeholder.getKey(), placeholder.getValue().toString());
@@ -1016,7 +1098,7 @@ public class TownyPlayerListener implements Listener {
 	 * @param event - PlayerLeaveTownEvent
 	 */
 	@EventHandler(priority = EventPriority.NORMAL)
-	public void onPlayerLeaveTown(PlayerLeaveTownEvent event) {
+	public void onPlayerLeaveTown(PlayerExitsFromTownBorderEvent event) {
 		Resident resident = TownyAPI.getInstance().getResident(event.getPlayer().getUniqueId());
 		String worldName = TownyAPI.getInstance().getTownyWorld(event.getPlayer().getWorld()).getFormattedUnclaimedZoneName();
 
@@ -1076,13 +1158,20 @@ public class TownyPlayerListener implements Listener {
 		
 		Resident resident = TownyUniverse.getInstance().getResident(event.getPlayer().getUniqueId());
 
-		// More than likely another plugin using a fake player to run a command. 
-		if (resident == null)
+		// More than likely another plugin using a fake player to run a command or,
+		// the player is an admin/op.
+		if (resident == null || resident.isAdmin())
 			return;
 		
 		final String command = event.getMessage().split(" ")[0];
 		
 		if (blockJailedPlayerCommand(event.getPlayer(), resident, command)) {
+			event.setCancelled(true);
+			return;
+		}
+		
+		// Potentially blocks players with a war from using the command.
+		if (blockWarPlayerCommand(event.getPlayer(), resident, command)) {
 			event.setCancelled(true);
 			return;
 		}
@@ -1093,6 +1182,14 @@ public class TownyPlayerListener implements Listener {
 			event.setCancelled(true);
 	}
 
+	public boolean blockWarPlayerCommand(Player player, Resident resident, String command) {
+		if (resident.hasTown() && resident.getTownOrNull().hasActiveWar() && blockedWarCommands.containsCommand(command)) {
+			TownyMessaging.sendErrorMsg(player, Translatable.of("msg_command_war_blocked"));
+			return true;
+		}
+		return false;
+	}
+	
 	/**
 	 * Blocks outlawed players using blacklisted commands.
 	 * @return Whether the command has been blocked.   
@@ -1132,17 +1229,21 @@ public class TownyPlayerListener implements Listener {
 			return false;
 		
 		// Let admins run commands.
-		if (TownyUniverse.getInstance().getPermissionSource().testPermission(player, PermissionNodes.TOWNY_ADMIN_TOWN_COMMAND_BLACKLIST_BYPASS.getNode()))
+		if (resident.hasPermissionNode(PermissionNodes.TOWNY_ADMIN_TOWN_COMMAND_BLACKLIST_BYPASS.getNode()))
 			return false;
 		
 		final Town town = townBlock == null ? null : townBlock.getTownOrNull();
 
+		if (town != null && town.hasActiveWar() && blockedWarCommands.containsCommand(command)) {
+			TownyMessaging.sendErrorMsg(player, Translatable.of("msg_command_war_blocked"));
+			return true;
+		}
 		/*
 		 * Commands are sometimes blocked from being run by outsiders on an town.
 		 */
 		if (town != null && blockedTownCommands.containsCommand(command) && blockedTouristCommands.containsCommand(command)) {
 			// Allow own town & let globally welcomed players run commands.
-			if (town.hasResident(resident) || TownyUniverse.getInstance().getPermissionSource().testPermission(player, PermissionNodes.TOWNY_ADMIN_TOURIST_COMMAND_LIMITATION_BYPASS.getNode()))
+			if (town.hasResident(resident) || resident.hasPermissionNode(PermissionNodes.TOWNY_ADMIN_TOURIST_COMMAND_LIMITATION_BYPASS.getNode()))
 				return false;
 			
 			TownyMessaging.sendErrorMsg(player, Translatable.of("msg_command_outsider_blocked", town.getName()));
@@ -1323,6 +1424,7 @@ public class TownyPlayerListener implements Listener {
 		this.blockedTouristCommands = new CommandList(TownySettings.getTouristBlockedCommands());
 		this.blockedTownCommands = new CommandList(TownySettings.getTownBlacklistedCommands());
 		this.blockedOutlawCommands = new CommandList(TownySettings.getOutlawBlacklistedCommands());
+		this.blockedWarCommands = new CommandList(TownySettings.getWarBlacklistedCommands());
 		this.ownPlotLimitedCommands = new CommandList(TownySettings.getPlayerOwnedPlotLimitedCommands());
 	}
 }

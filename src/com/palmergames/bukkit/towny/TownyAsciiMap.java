@@ -1,5 +1,6 @@
 package com.palmergames.bukkit.towny;
 
+import com.palmergames.bukkit.config.ConfigNodes;
 import com.palmergames.bukkit.towny.object.Translatable;
 import com.palmergames.bukkit.towny.object.Translator;
 import com.palmergames.bukkit.towny.object.WorldCoord;
@@ -9,8 +10,9 @@ import java.util.Map;
 
 import com.palmergames.bukkit.towny.utils.TownyComponents;
 
-import org.apache.commons.text.StringEscapeUtils;
 import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import net.kyori.adventure.text.Component;
@@ -41,9 +43,19 @@ public class TownyAsciiMap {
 	public static final int lineWidth = 27;
 	public static final int halfLineWidth = lineWidth / 2;
 	private static final int townBlockSize = TownySettings.getTownBlockSize();
-	public static final String forSaleSymbol = parseSymbol(TownySettings.forSaleMapSymbol());
-	public static final String homeSymbol = parseSymbol(TownySettings.homeBlockMapSymbol());
-	public static final String wildernessSymbol = parseSymbol(TownySettings.wildernessMapSymbol());
+	public static String forSaleSymbol = ConfigNodes.ASCII_MAP_SYMBOLS_FORSALE.getDefault();
+	public static String homeSymbol = ConfigNodes.ASCII_MAP_SYMBOLS_HOME.getDefault();
+	public static String outpostSymbol = ConfigNodes.ASCII_MAP_SYMBOLS_OUTPOST.getDefault();
+	public static String wildernessSymbol = ConfigNodes.ASCII_MAP_SYMBOLS_WILDERNESS.getDefault();
+	
+	static {
+		TownySettings.addReloadListener(NamespacedKey.fromString("towny:ascii-map-symbols"), config -> {
+			forSaleSymbol = parseSymbol(TownySettings.forSaleMapSymbol());
+			homeSymbol = parseSymbol(TownySettings.homeBlockMapSymbol());
+			outpostSymbol = parseSymbol(TownySettings.outpostMapSymbol());
+			wildernessSymbol = parseSymbol(TownySettings.wildernessMapSymbol());
+		});
+	}
 	
 	public static Component[] generateHelp(Player player) {
 		final Translator translator = Translator.locale(player);
@@ -74,20 +86,16 @@ public class TownyAsciiMap {
 	public static void generateAndSend(Towny plugin, Player player, int lineHeight) {
 
 		// Collect Sample Data
-		boolean hasTown = false;
-
 		Resident resident = TownyAPI.getInstance().getResident(player);
 		
 		if (resident == null) {
 			TownyMessaging.sendErrorMsg(player, Translatable.of("msg_err_not_registered"));
 			return;
 		}
-		
-		if (resident.hasTown())
-			hasTown = true;
 
-		TownyWorld world = TownyAPI.getInstance().getTownyWorld(player.getWorld().getName());
-		if (world == null) { 
+		TownyWorld world = TownyAPI.getInstance().getTownyWorld(player.getWorld());
+		World bukkitWorld = player.getWorld();
+		if (world == null || bukkitWorld == null) { 
 			TownyMessaging.sendErrorMsg(player, Translatable.of("msg_err_not_configured"));
 			return;
 		}
@@ -109,34 +117,34 @@ public class TownyAsciiMap {
 			for (int tbx = pos.getZ() - halfLineHeight; tbx <= pos.getZ() + (lineHeight - halfLineHeight - 1); tbx++) {
 				try {
 					townyMap[y][x] = Component.empty().color(NamedTextColor.WHITE);
-					TownBlock townblock = world.getTownBlock(tby, tbx);
-					if (!townblock.hasTown())
+					WorldCoord wc = new WorldCoord(bukkitWorld, new Coord(tby, tbx));
+					if (wc.isWilderness())
 						throw new TownyException();
+					TownBlock townblock = wc.getTownBlockOrNull();
 					Town town = townblock.getTownOrNull();
 					if (x == halfLineHeight && y == halfLineWidth)
-						// location
+						// This is the player's location, colour it special.
 						townyMap[y][x] = townyMap[y][x].color(NamedTextColor.GOLD);
-					else if (hasTown) {
-						if (resident.getTown() == town) {
-							// own town
-							townyMap[y][x] = townyMap[y][x].color(NamedTextColor.GREEN);
-							if (townblock.hasResident() && resident == townblock.getResidentOrNull())
-								//own plot
-								townyMap[y][x] = townyMap[y][x].color(NamedTextColor.YELLOW);
+					else if (townblock.hasResident(resident))
+						//own plot
+						townyMap[y][x] = townyMap[y][x].color(NamedTextColor.YELLOW);
+					else if (resident.hasTown())
+						if (town.hasResident(resident)) {
+								// own town
+								townyMap[y][x] = townyMap[y][x].color(NamedTextColor.GREEN);
 						} else if (resident.hasNation()) {
-							if (resident.getTown().getNation().hasTown(town))
-								// towns
+							Nation resNation = resident.getNationOrNull();
+							if (resNation.hasTown(town))
+								// own nation
 								townyMap[y][x] = townyMap[y][x].color(NamedTextColor.DARK_GREEN);
 							else if (town.hasNation()) {
-								Nation nation = resident.getTown().getNation();
-								if (nation.hasAlly(town.getNation()))
+								Nation townBlockNation = town.getNationOrNull();
+								if (resNation.hasAlly(townBlockNation))
 									townyMap[y][x] = townyMap[y][x].color(NamedTextColor.GREEN);
-								else if (nation.hasEnemy(town.getNation()))
-									// towns
+								else if (resNation.hasEnemy(townBlockNation))
 									townyMap[y][x] = townyMap[y][x].color(NamedTextColor.DARK_RED);
 							}
 						}
-					}
 
 					// Registered town block
 					if (townblock.getPlotPrice() != -1 || townblock.hasPlotObjectGroup() && townblock.getPlotObjectGroup().getPrice() != -1) {
@@ -146,6 +154,8 @@ public class TownyAsciiMap {
 						townyMap[y][x] = townyMap[y][x].content(forSaleSymbol);
 					} else if (townblock.isHomeBlock())
 						townyMap[y][x] = townyMap[y][x].content(homeSymbol);
+					else if (townblock.isOutpost())
+						townyMap[y][x] = townyMap[y][x].content(outpostSymbol);
 					else
 						townyMap[y][x] = townyMap[y][x].content(townblock.getType().getAsciiMapKey());
 					
@@ -281,10 +291,16 @@ public class TownyAsciiMap {
 	}
 
 	public static String parseSymbol(String symbol) {
-		if (symbol.startsWith("\\"))
-			return StringEscapeUtils.unescapeJava(symbol);
+		if (symbol.startsWith("\\u"))
+			return parseUnicode(symbol);
+//			return symbol.length() > 6 ? parseSupplementaryUnicode(symbol) : StringEscapeUtils.unescapeJava(symbol);
 		else 
 			return symbol.substring(0, 1);
 
+	}
+
+	private static String parseUnicode(String symbol) {
+		// remove the "\\u" before we get the resulting unicode symbol.
+		return String.valueOf(Character.toChars(Integer.parseInt(symbol.substring(2))));
 	}
 }

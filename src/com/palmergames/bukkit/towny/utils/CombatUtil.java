@@ -1,6 +1,5 @@
 package com.palmergames.bukkit.towny.utils;
 
-import com.palmergames.bukkit.towny.Towny;
 import com.palmergames.bukkit.towny.TownyAPI;
 import com.palmergames.bukkit.towny.TownyMessaging;
 import com.palmergames.bukkit.towny.TownySettings;
@@ -44,14 +43,6 @@ import java.util.List;
 public class CombatUtil {
 
 	/**
-	 * @deprecated As of 0.97.5.9, please use {@link #preventDamageCall(Entity, Entity, DamageCause)}
-	 */
-	@Deprecated
-	public static boolean preventDamageCall(Towny plugin, Entity attacker, Entity defender, DamageCause cause) {
-		return preventDamageCall(attacker, defender, cause);
-	}
-
-	/**
 	 * Tests the attacker against defender to see if we need to cancel
 	 * the damage event due to world PvP, Plot PvP or Friendly Fire settings.
 	 * Only allow a Wolves owner to cause it damage, and residents with destroy
@@ -64,7 +55,7 @@ public class CombatUtil {
 	 */
 	public static boolean preventDamageCall(Entity attacker, Entity defender, DamageCause cause) {
 
-		TownyWorld world = TownyAPI.getInstance().getTownyWorld(defender.getWorld().getName());
+		TownyWorld world = TownyAPI.getInstance().getTownyWorld(defender.getWorld());
 
 		// World using Towny
 		if (world == null || !world.isUsingTowny())
@@ -272,6 +263,12 @@ public class CombatUtil {
 				if (defenderTB == null)
 					return false;
 
+				/*
+				 * The config is set up so that non-players (mobs) are allowed to hurt the normally-protected entity types.
+				 */
+				if (!TownySettings.areProtectedEntitiesProtectedAgainstMobs())
+					return false;
+
 			    /*
 			     * Prevents projectiles fired by non-players harming non-player entities.
 			     * Could be a monster or it could be a dispenser.
@@ -285,7 +282,7 @@ public class CombatUtil {
 				*/
 				if (attackingEntity instanceof Wolf wolf && EntityTypeUtil.isInstanceOfAny(TownySettings.getProtectedEntityTypes(), defendingEntity)) {
 					if (isATamedWolfWithAOnlinePlayer(wolf)) {
-						Player owner = BukkitTools.getPlayer(wolf.getOwner().getName());
+						Player owner = BukkitTools.getPlayerExact(wolf.getOwner().getName());
 						return !PlayerCacheUtil.getCachePermission(owner, defendingEntity.getLocation(), Material.AIR, ActionType.DESTROY);
 					} else {
 						wolf.setTarget(null);
@@ -541,19 +538,6 @@ public class CombatUtil {
 	}
 
 	/**
-	 * Can resident a attack resident b?
-	 * 
-	 * @param a - Resident A in comparison
-	 * @param b - Resident B in comparison
-	 * @return true if they can attack.
-	 * @deprecated since 0.97.3.0 use {@link CombatUtil#isEnemy(String, String)} or {@link CombatUtil#isEnemy(Town, Town)}  
-	 */
-	@Deprecated
-	public static boolean canAttackEnemy(String a, String b) {
-		return isEnemy(a, b);
-	}
-
-	/**
 	 * Test if all the listed nations are allies
 	 * 
 	 * @param possibleAllies - List of Nations (List&lt;Nation&gt;)
@@ -654,7 +638,7 @@ public class CombatUtil {
 	public static boolean isEnemyTownBlock(Player player, WorldCoord worldCoord) {
 		Resident resident = TownyUniverse.getInstance().getResident(player.getUniqueId());
 		if (resident != null && resident.hasTown() && worldCoord.hasTownBlock())
-			return CombatUtil.isEnemy(resident.getTownOrNull(), worldCoord.getTownOrNull());
+			return CombatUtil.isEnemy(worldCoord.getTownOrNull(), resident.getTownOrNull());
 		return false;
 	}
 	
@@ -680,7 +664,7 @@ public class CombatUtil {
 		TownBlock dispenserTB = WorldCoord.parseWorldCoord(dispenser).getTownBlockOrNull();
 		TownBlock defenderTB = WorldCoord.parseWorldCoord(entity).getTownBlockOrNull();
 		
-		TownyWorld world = TownyAPI.getInstance().getTownyWorld(dispenser.getWorld().getName());
+		TownyWorld world = TownyAPI.getInstance().getTownyWorld(dispenser.getWorld());
 		if (world == null || !world.isUsingTowny())
 			return false;
 		

@@ -73,8 +73,10 @@ public class ResidentCommand extends BaseCommand implements CommandExecutor {
 		"fire",
 		"mobs",
 		"explosion",
+		"adminbypass",
 		"plotborder",
 		"constantplotborder",
+		"townborder",
 		"ignoreplots",
 		"bordertitles",
 		"townclaim",
@@ -91,6 +93,7 @@ public class ResidentCommand extends BaseCommand implements CommandExecutor {
 		"townunclaim",
 		"plotborder",
 		"constantplotborder",
+		"townborder",
 		"ignoreplots",
 		"reset",
 		"clear",
@@ -249,7 +252,7 @@ public class ResidentCommand extends BaseCommand implements CommandExecutor {
 		try {
 
 			if (split.length == 0) {
-				Resident res = getResidentOrThrow(player.getUniqueId());
+				Resident res = getResidentOrThrow(player);
 
 				Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> TownyMessaging.sendStatusScreen(player, TownyFormatter.getStatus(res, player)));
 			} else if (split[0].equalsIgnoreCase("?") || split[0].equalsIgnoreCase("help")) {
@@ -273,7 +276,7 @@ public class ResidentCommand extends BaseCommand implements CommandExecutor {
 				if (split.length > 1)
 					res = getResidentOrThrow(split[1]);
 				else
-					res = getResidentOrThrow(player.getUniqueId());
+					res = getResidentOrThrow(player);
 				
 				TownyMessaging.sendMessage(player, TownyFormatter.getTaxStatus(res, Translator.locale(player)));
 
@@ -291,7 +294,7 @@ public class ResidentCommand extends BaseCommand implements CommandExecutor {
 					return;
 				}
 
-				Resident resident = getResidentOrThrow(player.getUniqueId());
+				Resident resident = getResidentOrThrow(player);
 				
 				if (!resident.isJailed()) {
 					TownyMessaging.sendErrorMsg(player, Translatable.of("msg_err_you_aren't currently jailed"));
@@ -353,7 +356,7 @@ public class ResidentCommand extends BaseCommand implements CommandExecutor {
 			} else if (split[0].equalsIgnoreCase("spawn")) {
 
 				checkPermOrThrow(player, PermissionNodes.TOWNY_COMMAND_RESIDENT_SPAWN.getNode());
-				SpawnUtil.sendToTownySpawn(player, split, getResidentOrThrow(player.getUniqueId()), Translatable.of("msg_err_cant_afford_tp").forLocale(player), false, false, SpawnType.RESIDENT);
+				SpawnUtil.sendToTownySpawn(player, split, getResidentOrThrow(player), Translatable.of("msg_err_cant_afford_tp").forLocale(player), false, false, SpawnType.RESIDENT);
 
 			} else if (TownyCommandAddonAPI.hasCommand(CommandType.RESIDENT, split[0])) {
 				TownyCommandAddonAPI.getAddonCommand(CommandType.RESIDENT, split[0]).execute(player, "resident", split);

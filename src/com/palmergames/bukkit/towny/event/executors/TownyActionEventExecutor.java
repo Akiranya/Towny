@@ -69,6 +69,8 @@ public class TownyActionEventExecutor {
 			PlayerCache cache = PlayerCacheUtil.getCache(player);
 			if (cache.hasBlockErrMsg())
 				event.setCancelMessage(cache.getBlockErrMsg());
+			else
+				event.suppressMessage();
 		}
 
 		/*
@@ -79,7 +81,7 @@ public class TownyActionEventExecutor {
 		/*
 		 * Send any feedback when the action is denied.
 		 */
-		if (event.isCancelled() && event.getCancelMessage() != null && !event.isMessageSupressed())
+		if (event.isCancelled() && !event.isMessageSuppressed())
 			TownyMessaging.sendErrorMsg(player, event.getCancelMessage());
 
 		return !event.isCancelled();
@@ -94,10 +96,9 @@ public class TownyActionEventExecutor {
 	 */
 	private static boolean isAllowedExplosion(Location loc) {
 		boolean canExplode = false;
-		TownyWorld world = TownyAPI.getInstance().getTownyWorld(loc.getWorld().getName());
-		if (world == null)
-			canExplode = false;
-		else {
+		final TownyWorld world = TownyAPI.getInstance().getTownyWorld(loc.getWorld());
+
+		if (world != null) {
 		
 			if (TownyAPI.getInstance().isWilderness(loc)) {
 				/*
@@ -146,7 +147,7 @@ public class TownyActionEventExecutor {
 	 * @return true if the burn is allowed.
 	 */
 	private static boolean isAllowedBurn(Block block) {
-		TownyWorld townyWorld = TownyAPI.getInstance().getTownyWorld(block.getWorld().getName());
+		TownyWorld townyWorld = TownyAPI.getInstance().getTownyWorld(block.getWorld());
 			
 		/*
 		 *  Something being ignited in the wilderness.

@@ -6,7 +6,7 @@ import com.palmergames.bukkit.towny.TownyMessaging;
 import com.palmergames.bukkit.towny.TownySettings;
 import com.palmergames.bukkit.towny.TownyUniverse;
 import com.palmergames.bukkit.towny.event.player.PlayerCacheGetTownBlockStatusEvent;
-import com.palmergames.bukkit.towny.exceptions.TownyException;
+import com.palmergames.bukkit.towny.hooks.PluginIntegrations;
 import com.palmergames.bukkit.towny.object.Coord;
 import com.palmergames.bukkit.towny.object.Nation;
 import com.palmergames.bukkit.towny.object.PlayerCache;
@@ -19,7 +19,6 @@ import com.palmergames.bukkit.towny.object.TownyPermission.ActionType;
 import com.palmergames.bukkit.towny.object.Translatable;
 import com.palmergames.bukkit.towny.object.WorldCoord;
 import com.palmergames.bukkit.towny.permissions.PermissionNodes;
-import com.palmergames.bukkit.towny.regen.TownyRegenAPI;
 import com.palmergames.bukkit.towny.utils.PermissionGUIUtil.SetPermissionType;
 import com.palmergames.bukkit.util.BukkitTools;
 
@@ -267,14 +266,6 @@ public class PlayerCacheUtil {
 		// Has to be in a town.
 		TownBlock townBlock = worldCoord.getTownBlockOrNull();
 		Town town = worldCoord.getTownOrNull();
-		if (townBlock.isLocked()) {
-			// Push the TownBlock location to the queue for a snapshot (if it's not already in the queue).
-			if (townBlock.getWorld().isUsingPlotManagementRevert() && (TownySettings.getPlotManagementSpeed() > 0)) {
-				TownyRegenAPI.addWorldCoord(townBlock.getWorldCoord());
-				return TownBlockStatus.LOCKED;
-			}
-			townBlock.setLocked(false);
-		}
 
 		/*
 		 * Find the resident data for this player.
@@ -283,7 +274,7 @@ public class PlayerCacheUtil {
 		
 		if (resident == null) {
 			// Check if entity is a Citizens NPC
-			if (BukkitTools.checkCitizens(player))
+			if (PluginIntegrations.getInstance().checkCitizens(player))
 				return TownBlockStatus.NOT_REGISTERED;
  
 			// Retry getting a resident with the ability to get a fake player resident.
@@ -296,58 +287,52 @@ public class PlayerCacheUtil {
 			}
 		}
 
-		try {
-			if (town.isMayor(resident))
-				return TownBlockStatus.TOWN_OWNER;
-			
-			if (town.hasTrustedResident(resident))
-				return TownBlockStatus.TOWN_TRUSTED;
-			
-			if (townBlock.hasTrustedResident(resident) && !townBlock.hasResident(resident))
-				return TownBlockStatus.PLOT_TRUSTED;
-			
-			// Resident Plot rights
-			if (townBlock.hasResident()) {
-				Resident owner = townBlock.getResidentOrNull();
-				if (resident == owner)
-					return TownBlockStatus.PLOT_OWNER;
-				else if (owner.hasFriend(resident))
-					return TownBlockStatus.PLOT_FRIEND;
-				else if (resident.hasTown() && CombatUtil.isSameTown(owner.getTown(), resident.getTown()))
-					return TownBlockStatus.PLOT_TOWN;
-				else if (resident.hasTown() && CombatUtil.isAlly(owner.getTown(), resident.getTown()))
-					return TownBlockStatus.PLOT_ALLY;
-				else
-					return TownBlockStatus.OUTSIDER;
-			}
-
-			// Resident with no town.
-			if (!resident.hasTown())				
+		if (town.isMayor(resident))
+			return TownBlockStatus.TOWN_OWNER;
+		
+		if (town.hasTrustedResident(resident))
+			return TownBlockStatus.TOWN_TRUSTED;
+		
+		if (townBlock.hasTrustedResident(resident) && !townBlock.hasResident(resident))
+			return TownBlockStatus.PLOT_TRUSTED;
+		
+		// Resident Plot rights
+		if (townBlock.hasResident()) {
+			Resident owner = townBlock.getResidentOrNull();
+			if (resident == owner)
+				return TownBlockStatus.PLOT_OWNER;
+			else if (owner.hasFriend(resident))
+				return TownBlockStatus.PLOT_FRIEND;
+			else if (resident.hasTown() && CombatUtil.isSameTown(owner, resident))
+				return TownBlockStatus.PLOT_TOWN;
+			else if (resident.hasTown() && CombatUtil.isAlly(owner, resident))
+				return TownBlockStatus.PLOT_ALLY;
+			else
 				return TownBlockStatus.OUTSIDER;
-			
-			// Town has this resident, who isn't the mayor.
-			if (town.hasResident(resident))
-				return TownBlockStatus.TOWN_RESIDENT;
-			
-			// Nation group.
-			if (CombatUtil.isSameNation(town, resident.getTown()))
-				return TownBlockStatus.TOWN_NATION;
-			
-			// Ally group.
-			if (CombatUtil.isAlly(town, resident.getTown()))
-				return TownBlockStatus.TOWN_ALLY;
-			
-			// Enemy.
-			if (CombatUtil.isEnemy(resident.getTown(), town))
-				return TownBlockStatus.ENEMY;
-
-			// Nothing left but Outsider.
-			return TownBlockStatus.OUTSIDER;
-
-		} catch (TownyException e) {
-			// Outsider destroy rights
-			return TownBlockStatus.OUTSIDER;
 		}
+
+		// Resident with no town.
+		if (!resident.hasTown())
+			return TownBlockStatus.OUTSIDER;
+		
+		// Town has this resident, who isn't the mayor.
+		if (town.hasResident(resident))
+			return TownBlockStatus.TOWN_RESIDENT;
+		
+		// Nation group.
+		if (CombatUtil.isSameNation(town, resident.getTownOrNull()))
+			return TownBlockStatus.TOWN_NATION;
+		
+		// Ally group.
+		if (CombatUtil.isAlly(town, resident.getTownOrNull()))
+			return TownBlockStatus.TOWN_ALLY;
+		
+		// Enemy.
+		if (CombatUtil.isEnemy(resident.getTownOrNull(), town))
+			return TownBlockStatus.ENEMY;
+
+		// Nothing left but Outsider.
+		return TownBlockStatus.OUTSIDER;
 	}
 
 	/**
@@ -393,11 +378,6 @@ public class PlayerCacheUtil {
 			return false;
 		}
 
-		if (status == TownBlockStatus.LOCKED) {
-			cacheBlockErrMsg(player, Translatable.of("msg_cache_block_error_locked").forLocale(player));
-			return false;
-		}
-
 		/*
 		 * Handle the wilderness. 
 		 */
@@ -406,7 +386,7 @@ public class PlayerCacheUtil {
 			/*
 			 * Handle the Wilderness.
 			 */
-			boolean hasWildOverride = townyUniverse.getPermissionSource().hasWildOverride(pos.getTownyWorldOrNull(), player, material, action);
+			boolean hasWildOverride = townyUniverse.getPermissionSource().hasWildOverride(pos.getTownyWorld(), player, material, action);
 
 			if (status == TownBlockStatus.UNCLAIMED_ZONE) {
 				if (hasWildOverride)
@@ -424,7 +404,7 @@ public class PlayerCacheUtil {
 			 */
 			if (TownySettings.getNationZonesEnabled() && status == TownBlockStatus.NATION_ZONE) {
 				// Admins that also have wilderness permission can bypass the nation zone.
-				if (townyUniverse.getPermissionSource().testPermission(player, PermissionNodes.TOWNY_ADMIN_NATION_ZONE.getNode()))
+				if (res.hasPermissionNode(PermissionNodes.TOWNY_ADMIN_NATION_ZONE.getNode()))
 					return true;
 
 				// Wasn't able to build in the wilderness, regardless.
@@ -434,14 +414,14 @@ public class PlayerCacheUtil {
 				}
 
 				// We know that the nearest Town will have a nation because the TownBlockStatus.
-				Nation nearestNation = TownyAPI.getInstance().getTownNationOrNull(pos.getTownyWorldOrNull().getClosestTownWithNationFromCoord(pos.getCoord(), null));
+				Nation nearestNation = TownyAPI.getInstance().getTownNationOrNull(pos.getTownyWorld().getClosestTownWithNationFromCoord(pos.getCoord(), null));
 
 				// If the player has a Nation and is a member of this NationZone's nation.
 				if (res.hasNation() && res.getNationOrNull().getUUID().equals(nearestNation.getUUID()))
 					return true;
 
 				// The player is not a nation member of this NationZone.
-				cacheBlockErrMsg(player, Translatable.of("nation_zone_this_area_under_protection_of", pos.getTownyWorldOrNull().getFormattedUnclaimedZoneName(), nearestNation.getName()).forLocale(player));
+				cacheBlockErrMsg(player, Translatable.of("nation_zone_this_area_under_protection_of", pos.getTownyWorld().getFormattedUnclaimedZoneName(), nearestNation.getName()).forLocale(player));
 				return false;
 			}
 		}

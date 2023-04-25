@@ -5,7 +5,6 @@ import com.palmergames.bukkit.towny.TownyAPI;
 import com.palmergames.bukkit.towny.TownySettings;
 import com.palmergames.bukkit.towny.TownyUniverse;
 import com.palmergames.bukkit.towny.event.executors.TownyActionEventExecutor;
-import com.palmergames.bukkit.towny.exceptions.NotRegisteredException;
 import com.palmergames.bukkit.towny.object.TownBlock;
 import com.palmergames.bukkit.towny.object.TownyWorld;
 import com.palmergames.bukkit.towny.object.WorldCoord;
@@ -29,7 +28,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockBurnEvent;
-import org.bukkit.event.block.BlockCanBuildEvent;
 import org.bukkit.event.block.BlockDispenseEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockFertilizeEvent;
@@ -93,22 +91,9 @@ public class TownyBlockListener implements Listener {
 			event.setCancelled(true);
 		}
 		
+		//noinspection IsCancelled
 		if (!event.isCancelled() && block.getType() == Material.CHEST && !TownyUniverse.getInstance().getPermissionSource().isTownyAdmin(event.getPlayer()))
 			testDoubleChest(event.getPlayer(), event.getBlock());
-	}
-	
-	@EventHandler
-	public void onBlockCanBuild(BlockCanBuildEvent event) {
-		//Temporary workaround for grass remaining snowy when powdered snow is placed on top of it.
-		if (event.getMaterial().name().equals("POWDER_SNOW")) {
-			
-			Block block = event.getBlock();
-			if (!TownyAPI.getInstance().isTownyWorld(block.getWorld()))
-				return;
-
-			if (!TownyActionEventExecutor.canBuild(event.getPlayer(), event.getBlock().getLocation(), event.getBlock().getType()))
-				event.setBuildable(false);
-		}
 	}
 
 	private void testDoubleChest(Player player, Block block) {
@@ -222,11 +207,11 @@ public class TownyBlockListener implements Listener {
 			return;
 		}
 		
-		if (!TownyAPI.getInstance().isTownyWorld(event.getBlock().getWorld()))
+		final TownyWorld world = TownyAPI.getInstance().getTownyWorld(event.getBlock().getWorld());
+		if (world == null || !world.isUsingTowny())
 			return;
 		
-		TownyWorld world = TownyAPI.getInstance().getTownyWorld(event.getBlock().getWorld().getName());
-		boolean allowWild = world != null && world.getUnclaimedZoneBuild();
+		boolean allowWild = world.getUnclaimedZoneBuild();
 
 		if (!canBlockMove(event.getBlock(), event.getBlock().getRelative(event.getDirection()), allowWild))
 			event.setCancelled(true);
@@ -255,23 +240,24 @@ public class TownyBlockListener implements Listener {
 		WorldCoord from = WorldCoord.parseWorldCoord(block);
 		WorldCoord to = WorldCoord.parseWorldCoord(blockTo);
 
-		if (from.equals(to) || (allowWild && to.isWilderness()) || (to.isWilderness() && from.isWilderness()))
+		// Same WorldCoord, Both are Wilderness, or We allow moving from Town to Wild.
+		if (from.equals(to) || (to.isWilderness() && from.isWilderness()) || (allowWild && to.isWilderness()))
 			return true;
 
-		try {
-			TownBlock currentTownBlock = from.getTownBlock();
-			TownBlock destinationTownBlock = to.getTownBlock();
-
-			//Both townblocks are owned by the same resident.
-			if (currentTownBlock.hasResident() && destinationTownBlock.hasResident() && currentTownBlock.getResidentOrNull() == destinationTownBlock.getResidentOrNull())
-				return true;
-
-			//Both townblocks are owned by the same town.
-			return currentTownBlock.getTown() == destinationTownBlock.getTown() && !currentTownBlock.hasResident() && !destinationTownBlock.hasResident();
-		} catch (NotRegisteredException e) {
-			//The 'from' townblock is wilderness.
+		// If only one of 'from' and 'to' is wilderness and allowWild is false, this isn't allowed.
+		if (from.isWilderness() || to.isWilderness())
 			return false;
-		}
+
+		// Neither 'from' or 'to' are wilderness.
+		TownBlock currentTownBlock = from.getTownBlockOrNull();
+		TownBlock destinationTownBlock = to.getTownBlockOrNull();
+
+		//Both townblocks are owned by the same resident.
+		if (currentTownBlock.hasResident() && destinationTownBlock.hasResident() && currentTownBlock.getResidentOrNull() == destinationTownBlock.getResidentOrNull())
+			return true;
+
+		//Both townblocks are owned by the same town.
+		return currentTownBlock.getTownOrNull() == destinationTownBlock.getTownOrNull() && !currentTownBlock.hasResident() && !destinationTownBlock.hasResident();
 	}
 	
 	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -281,10 +267,10 @@ public class TownyBlockListener implements Listener {
 			return;
 		}
 
-		if (!TownyAPI.getInstance().isTownyWorld(event.getBlock().getWorld()))
+		final TownyWorld townyWorld = TownyAPI.getInstance().getTownyWorld(event.getBlock().getWorld());
+		if (townyWorld == null || !townyWorld.isUsingTowny())
 			return;
 		
-		TownyWorld townyWorld = TownyAPI.getInstance().getTownyWorld(event.getBlock().getWorld().getName());
 		Material material = event.getBlock().getType();
 		/*
 		 * event.getBlock() doesn't return the bed when a bed or respawn anchor is the cause of the explosion, so we use this workaround.
@@ -349,6 +335,10 @@ public class TownyBlockListener implements Listener {
 		
 		if (!TownyAPI.getInstance().isTownyWorld(event.getBlock().getWorld()))
 			return;
+
+		// Prevent liquid spilling in areas that are being reverted to a pre-claim snapshot. 
+		if (TownyRegenAPI.hasActiveRegeneration(WorldCoord.parseWorldCoord(event.getBlock())))
+			event.setCancelled(true);
 
 		if (!TownySettings.getPreventFluidGriefingEnabled() || event.getBlock().getType() == Material.DRAGON_EGG)
 			return;

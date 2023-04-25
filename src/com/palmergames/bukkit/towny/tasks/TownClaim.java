@@ -7,12 +7,11 @@ import com.palmergames.bukkit.towny.TownySettings;
 import com.palmergames.bukkit.towny.TownyUniverse;
 import com.palmergames.bukkit.towny.confirmations.Confirmation;
 import com.palmergames.bukkit.towny.event.TownClaimEvent;
-import com.palmergames.bukkit.towny.exceptions.AlreadyRegisteredException;
+import com.palmergames.bukkit.towny.event.town.TownUnclaimEvent;
 import com.palmergames.bukkit.towny.exceptions.TownyException;
-import com.palmergames.bukkit.towny.object.Resident;
 import com.palmergames.bukkit.towny.object.Town;
 import com.palmergames.bukkit.towny.object.TownBlock;
-import com.palmergames.bukkit.towny.object.TownyWorld;
+import com.palmergames.bukkit.towny.object.TownBlockType;
 import com.palmergames.bukkit.towny.object.Translatable;
 import com.palmergames.bukkit.towny.object.WorldCoord;
 import com.palmergames.bukkit.towny.regen.PlotBlockData;
@@ -24,14 +23,13 @@ import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 
 /**
  * @author ElgarL
  * 
  */
-public class TownClaim extends Thread {
+public class TownClaim implements Runnable {
 
 	Towny plugin;
 	private final Player player;
@@ -41,6 +39,9 @@ public class TownClaim extends Thread {
 	private boolean outpost;
 	private final boolean claim;
 	private final boolean forced;
+	private double runningRefund = 0.0;
+	private double insufficientFunds = 0.0;
+	private boolean successfulRun = false;
 
 	/**
 	 * @param plugin reference to towny
@@ -63,178 +64,226 @@ public class TownClaim extends Thread {
 		this.outpost = isOutpost;
 		this.claim = claim;
 		this.forced = forced;
-		this.setPriority(MIN_PRIORITY);
+		this.runningRefund = 0.0;
 	}
 
 	@Override
 	public void run() {
-		TownyUniverse townyUniverse = TownyUniverse.getInstance();
 
-		List<Town> towns = new ArrayList<>();
-		TownyWorld world = null;
-		if (player != null) {
-			if (claim)
-				TownyMessaging.sendMsg(player, Translatable.of("msg_process_town_claim"));
-			else 
-				TownyMessaging.sendMsg(player, Translatable.of("msg_process_town_unclaim"));
+		if (player != null)
+			TownyMessaging.sendMsg(player, claim ? Translatable.of("msg_process_town_claim") : Translatable.of("msg_process_town_unclaim"));
+
+		if (selection != null) // Selection is never null unless a resident has done /t unclaim all.
+			processSelection();
+		else if (!claim) // Selection was null, someone has used /t unclaim all.
+			runUnclaimAll();
+
+		if (successfulRun) {
+			if (town != null)
+				town.save();
+			
+			plugin.resetCache();
+			sendFeedback();
 		}
+	}
 
-		if (selection != null) {
+	private void processSelection() {
+		List<WorldCoord> disallowedWorldCoords = new ArrayList<>();
 
-			for (WorldCoord worldCoord : selection) {
+		for (WorldCoord worldCoord : selection) {
+			try {
+				if (claim)
+					townClaim(worldCoord);
+				else
+					townUnclaim(worldCoord);
 
-				try {
-					world = worldCoord.getTownyWorld();
-
-					if (claim) {
-						// Claim						
-						townClaim(town, worldCoord, outpost, player);
-						// Reset so we only flag the first plot as an outpost.
-						outpost = false;
-					} else {
-						// Unclaim
-						this.town = worldCoord.getTownBlock().getTown();
-						townUnclaim(town, worldCoord, forced);
-					}
-
-					// Mark this town as modified for saving.
-					if (!towns.contains(town))
-						towns.add(town);
-					
-				} catch (TownyException x) {
-					TownyMessaging.sendErrorMsg(player, x.getMessage());
-				}
-
-			}
-		
-			double unclaimRefund = TownySettings.getClaimRefundPrice();
-			if (!claim && unclaimRefund != 0.0) {
-				double refund = Math.abs(unclaimRefund * selection.size());
-				if (unclaimRefund > 0) {
-					town.getAccount().deposit(refund, "Town Unclaim Refund");
-					TownyMessaging.sendMsg(player, Translatable.of("refund_message", TownyEconomyHandler.getFormattedBalance(refund), selection.size()));
-				}
-				if (unclaimRefund < 0) {
-					town.getAccount().withdraw(refund, "Town Unclaim Cost");
-					TownyMessaging.sendMsg(player, Translatable.of("msg_your_town_paid_x_to_unclaim", TownyEconomyHandler.getFormattedBalance(refund)));
-				}
-			}
-
-		} else if (!claim) {
-
-			if (town == null) {
-				TownyMessaging.sendErrorMsg(player, Translatable.of("msg_err_nothing_to_unclaim"));
-				return;
-			}
-
-			Resident resident = player != null ? townyUniverse.getResident(player.getUniqueId()) : null;
-			if (resident == null) {
-				return;
-			}
-			int townSize = town.getTownBlocks().size() - 1; // size() - 1 because the homeblock will not be unclaimed.
-			double refund = TownySettings.getClaimRefundPrice() * townSize;
-			// Send confirmation message,
-			Confirmation.runOnAccept(() -> { 
-				TownClaim.townUnclaimAll(plugin, town);
-				if (TownyEconomyHandler.isActive() && refund > 0.0) {
-					town.getAccount().deposit(TownySettings.getClaimRefundPrice()*townSize - 1, "Town Unclaim Refund"); 
-					TownyMessaging.sendMsg(player, Translatable.of("refund_message", TownySettings.getClaimRefundPrice()*townSize, townSize));
-				}
-			})
-			.sendTo(player);
-		}
-
-		if (!towns.isEmpty()) {
-			for (Town test : towns) {
-				test.save();
+				// If we have had at least one successful claim/unclaim, mark this as successful.
+				successfulRun = true;
+			} catch (TownyException x) {
+				// Based on the selection filtering that runs before we start TownClaim, the selection size should never drop below 0.
+				TownyMessaging.sendErrorMsg(player, x.getMessage(player));
+				disallowedWorldCoords.add(worldCoord);
 			}
 		}
 
-		plugin.resetCache();
+		if (!disallowedWorldCoords.isEmpty()) {
+			if (insufficientFunds != 0.0) 
+				TownyMessaging.sendErrorMsg(player, Translatable.of("msg_err_your_town_cannot_afford_unclaim", TownyEconomyHandler.getFormattedBalance(insufficientFunds)));
+			for (WorldCoord remove : disallowedWorldCoords)
+				selection.remove(remove);
+		}
 
-		if (player != null) {
+		// Handle refund-for-unclaiming rules.
+		if (!claim && selection.size() > 0 && runningRefund != 0.0)
+			refundForUnclaim(runningRefund, selection.size());
+	}
+
+	private void runUnclaimAll() {
+		if (town == null) { // This should never occur.
+			TownyMessaging.sendErrorMsg(player, Translatable.of("msg_err_nothing_to_unclaim"));
+			return;
+		}
+
+		// Send confirmation message before unclaiming everything, processing potential refund for unclaim.
+		Confirmation.runOnAccept(() -> {
+			if (TownyEconomyHandler.isActive() && TownySettings.getClaimRefundPrice() != 0.0) {
+				int unclaimSize = town.getTownBlocks().size() - 1;
+				double totalRefund = TownySettings.getClaimRefundPrice() * unclaimSize;
+
+				if (totalRefund < 0.0 && !town.getAccount().canPayFromHoldings(Math.abs(totalRefund))) { // Town Cannot afford the negative refund (cost) to unclaim all.
+					TownyMessaging.sendErrorMsg(player, Translatable.of("msg_err_your_town_cannot_afford_unclaim", TownyEconomyHandler.getFormattedBalance(totalRefund)));
+					return;
+				}
+				if (totalRefund != 0.0) // There is a refund of some type occuring.
+					refundForUnclaim(totalRefund, unclaimSize);
+			}
+			townUnclaimAll(town);
+			successfulRun = true;
+			TownyMessaging.sendMessage(player, Translatable.of("msg_you_have_unclaimed_everything_but_your_homeblock"));
+		})
+		.setTitle(Translatable.of("confirmation_did_you_want_to_unclaim_all"))
+		.sendTo(player);
+	}
+
+	private void sendFeedback() {
+		if (player != null && selection.size() > 0) {
+			String feedbackSlug = selection.size() > 5 ? "Total TownBlocks: " + selection.size() : Arrays.toString(selection.toArray(new WorldCoord[0]));
 			if (claim) {
-				TownyMessaging.sendMsg(player, Translatable.of("msg_annexed_area", (selection.size() > 5) ? "Total TownBlocks: " + selection.size() : Arrays.toString(selection.toArray(new WorldCoord[0]))));
-				if (world != null && world.isUsingPlotManagementRevert())
-					TownyMessaging.sendMsg(player, Translatable.of("msg_wait_locked"));
+				// Something has been claimed.
+				TownyMessaging.sendMsg(player, Translatable.of("msg_annexed_area", feedbackSlug));
 			} else if (forced) {
-				TownyMessaging.sendMsg(player, Translatable.of("msg_admin_unclaim_area", (selection.size() > 5) ? "Total TownBlocks: " + selection.size() : Arrays.toString(selection.toArray(new WorldCoord[0]))));
-				if ((town != null) && (world != null && world.isUsingPlotManagementRevert()))
-					TownyMessaging.sendMsg(player, Translatable.of("msg_wait_locked"));
+				// An admin has force-fully unclaimed an area.
+				TownyMessaging.sendMsg(player, Translatable.of("msg_admin_unclaim_area", feedbackSlug));
+			} else {
+				// /t unclaim was used.
+				TownyMessaging.sendMsg(player, Translatable.of("msg_abandoned_area",  feedbackSlug));
 			}
+		} else if (town != null && selection == null) {
+			// /t unclaim all was used.
+			TownyMessaging.sendPrefixedTownMessage(town, Translatable.of("msg_abandoned_area_1"));
 		}
 	}
 
-	private void townClaim(Town town, WorldCoord worldCoord, boolean isOutpost, Player player) throws TownyException {
+	private void townClaim(WorldCoord worldCoord) throws TownyException {
+		boolean alreadyClaimed = worldCoord.hasTownBlock();
 
-		if (TownyUniverse.getInstance().hasTownBlock(worldCoord))
-				throw new AlreadyRegisteredException(Translatable.of("msg_already_claimed", "some town").forLocale(player));
-		else {
-			TownBlock townBlock = new TownBlock(worldCoord.getX(), worldCoord.getZ(), worldCoord.getTownyWorld());
-			townBlock.setTown(town);
-			// Set the plot permissions to mirror the towns.
-			townBlock.setType(townBlock.getType());
-			if (isOutpost) {
-				townBlock.setOutpost(true);
-				town.addOutpostSpawn(outpostLocation);
-			}
+		if (alreadyClaimed && !worldCoord.canBeStolen())
+			throw new TownyException(Translatable.of("msg_already_claimed", worldCoord.getTownOrNull().getName()));
 
-			if (worldCoord.getTownyWorld().isUsingPlotManagementRevert() && TownySettings.getPlotManagementSpeed() > 0) {
-				// Check if the townblock is actively being regenerated.
-				if (TownyRegenAPI.getRegenQueueList().contains(townBlock.getWorldCoord())) {
-					PlotBlockData plotChunk = TownyRegenAPI.getPlotChunk(townBlock);
-					if (plotChunk != null) {
-						TownyRegenAPI.removeFromActiveRegeneration(plotChunk); // just claimed so stop regeneration.
-						townBlock.setLocked(false);
-					}
-					TownyRegenAPI.removeFromRegenQueueList(worldCoord);
-				} 
-				// Check if a plot snapshot exists for this townblock already (inactive, unqueued regeneration.)
-				if (!TownyUniverse.getInstance().getDataSource().hasPlotData(townBlock)) {
-					// Queue to have a snapshot made if there is not already an earlier snapshot.
-					TownyRegenAPI.addWorldCoord(townBlock.getWorldCoord());
-					townBlock.setLocked(true);
-				}
+		TownBlock townBlock = !alreadyClaimed ? new TownBlock(worldCoord) : worldCoord.getTownBlockOrNull();
+	
+		// If this is an occaision where a town is stealing this land, do the
+		// prep to clean the old town from the townblock.
+		if (alreadyClaimed) {
+			Town oldTown = worldCoord.getTownOrNull();
+
+			//  Fire an event for other plugins.
+			BukkitTools.fireEvent(new TownUnclaimEvent(oldTown, worldCoord));
+
+			if (townBlock.hasResident())
+				townBlock.setResident(null, false);
+
+			oldTown.save();
+			// Many other things are going to be handled by the townBlock.setTown(town) below, including:
+			// - Removing the outpost if it exists.
+			// - Removing the oldTown's homeblock.
+			// - Removing the town's jail if it is.
+			// - Removing the oldTown's nation spawn point.
+			// - Updating the oldTown's TownBlockTypeCache.
+		}
+
+		townBlock.setTown(town);
+		townBlock.setType(!alreadyClaimed ? townBlock.getType() : TownBlockType.RESIDENTIAL); // Sets the plot permissions to mirror the towns.
+		if (outpost) {
+			townBlock.setOutpost(true);
+			town.addOutpostSpawn(outpostLocation);
+			outpost = false; // Reset so we only flag the first plot as an outpost.
+		}
+
+		if (!alreadyClaimed)
+			// Claiming land can influence the Revert on Unclaim feature.
+			handleRevertOnUnclaimPossiblities(worldCoord, townBlock);
+
+		// Save the TownBlock in the DB.
+		townBlock.save();
+
+		// Raise an event for the claim
+		BukkitTools.fireEvent(new TownClaimEvent(townBlock, player));
+	}
+
+	private void handleRevertOnUnclaimPossiblities(WorldCoord worldCoord, TownBlock townBlock) {
+		if (!worldCoord.getTownyWorld().isUsingPlotManagementRevert() || TownySettings.getPlotManagementSpeed() == 0)
+			return;
+
+		// Check if the townblock is actively being regenerated.
+		if (TownyRegenAPI.getRegenQueueList().contains(worldCoord)) {
+			PlotBlockData plotChunk = TownyRegenAPI.getPlotChunk(townBlock);
+			if (plotChunk != null) {
+				TownyRegenAPI.removeFromActiveRegeneration(plotChunk); // just claimed so stop regeneration.
 			}
-			
-			townBlock.save();
-			
-			// Raise an event for the claim
-			BukkitTools.fireEvent(new TownClaimEvent(townBlock, player));
-				
+			TownyRegenAPI.removeFromRegenQueueList(worldCoord);
+		}
+		
+		// Check if a plot snapshot exists for this townblock already (inactive, unqueued regeneration.)
+		if (!TownyUniverse.getInstance().getDataSource().hasPlotData(townBlock)) {
+			// Queue to have a snapshot made if there is not already an earlier snapshot.
+			TownyRegenAPI.handleNewSnapshot(townBlock);
 		}
 	}
 
-	// Unclaim event comes later in removeTownBlock().
-	private void townUnclaim(final Town town, final WorldCoord worldCoord, boolean force) throws TownyException {
+	private void townUnclaim(final WorldCoord worldCoord) throws TownyException {
 		if (worldCoord.isWilderness())
 			throw new TownyException(Translatable.of("msg_not_claimed_1"));
-		if (!worldCoord.hasTown(town) && !force)
+		if (!forced && town != null && !worldCoord.hasTown(town))
 			throw new TownyException(Translatable.of("msg_area_not_own"));
 
-		Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, 
-				() -> TownyUniverse.getInstance().getDataSource().removeTownBlock(worldCoord.getTownBlockOrNull()), 1);
+		// Handle refund-for-unclaiming rules.
+		double unclaimRefund = TownySettings.getClaimRefundPrice();
+		if (TownyEconomyHandler.isActive() && unclaimRefund != 0.0) {
+			// The runningRefund is used because this will consolidate the refund into one
+			// transaction when there are multiple plots being unclaimed, easing strain on
+			// the economy plugin and making the bankhistory book cleaner.
+			runningRefund = runningRefund + unclaimRefund;
+
+			// If the unclaim refund is negative (costing the town money,) make sure that
+			// the Town can pay for the new runningCost total amount. 
+			// All of this was already determined in the TownCommand class but a player
+			// might be trying something tricky before accepting the confirmation.
+			if (unclaimRefund < 0 && town != null && !town.getAccount().canPayFromHoldings(Math.abs(runningRefund))) {
+				runningRefund = runningRefund - unclaimRefund;
+				insufficientFunds = insufficientFunds + Math.abs(unclaimRefund);
+				throw new TownyException(""); // This empty-messaged TownyException means that the player will not see a Error message every time they cannot pay.
+			}
+		}
+
+		unclaimTownBlock(worldCoord.getTownBlockOrNull()); // Unclaim event comes later in removeTownBlock().
 	}
 
-	// Unclaim event comes later in removeTownBlock().
-	public static void townUnclaimAll(Towny plugin, final Town town) {
+	private void townUnclaimAll(final Town town) {
+		new ArrayList<>(town.getTownBlocks()).stream()
+			.filter(tb -> town.hasHomeBlock() && !tb.equals(town.getHomeBlockOrNull())) // Prevent removing the homeblock
+			.forEach(tb -> unclaimTownBlock(tb)); // Unclaim event comes later in removeTownBlock().
+	}
 
-		Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, () -> {
+	/**
+	 * Unclaims a single TownBlock in a task delayed by a tick.
+	 * @param townBlock TownBlock to remove from the database.
+	 */
+	private void unclaimTownBlock(TownBlock townBlock) {
+		Bukkit.getScheduler().scheduleSyncDelayedTask(plugin,
+				() -> TownyUniverse.getInstance().getDataSource().removeTownBlock(townBlock), 1);
+	}
 
-			// Prevent removing the homeblock
-			Collection<TownBlock> townBlocks = new ArrayList<>(town.getTownBlocks());
-			for (TownBlock townBlock : townBlocks) {
-				try {
-					if (!town.hasHomeBlock() || !townBlock.equals(town.getHomeBlock())) {
-						TownyUniverse.getInstance().getDataSource().removeTownBlock(townBlock);
-					}
-				} catch (TownyException ignore) {
-				}
-			}
-			
-			TownyMessaging.sendPrefixedTownMessage(town, Translatable.of("msg_abandoned_area_1"));
+	private void refundForUnclaim(double unclaimRefund, int numUnclaimed) {
+		if (TownySettings.isEconomyAsync() && Bukkit.getServer().isPrimaryThread()) {
+			Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> refundForUnclaim(unclaimRefund, numUnclaimed));
+			return;
+		}
+		
+		if (unclaimRefund > 0 && town.getAccount().deposit(unclaimRefund, "Town Unclaim Refund"))
+			TownyMessaging.sendMsg(player, Translatable.of("refund_message", TownyEconomyHandler.getFormattedBalance(unclaimRefund), numUnclaimed));
 
-		}, 1);
-
+		if (unclaimRefund < 0 && town.getAccount().withdraw(unclaimRefund, "Town Unclaim Cost"))
+			TownyMessaging.sendMsg(player, Translatable.of("msg_your_town_paid_x_to_unclaim", TownyEconomyHandler.getFormattedBalance(unclaimRefund)));
 	}
 }

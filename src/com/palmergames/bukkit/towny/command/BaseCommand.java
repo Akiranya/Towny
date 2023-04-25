@@ -3,7 +3,6 @@ package com.palmergames.bukkit.towny.command;
 import com.palmergames.bukkit.towny.TownyAPI;
 import com.palmergames.bukkit.towny.TownyUniverse;
 import com.palmergames.bukkit.towny.exceptions.NoPermissionException;
-import com.palmergames.bukkit.towny.exceptions.NotRegisteredException;
 import com.palmergames.bukkit.towny.exceptions.TownyException;
 import com.palmergames.bukkit.towny.object.Nation;
 import com.palmergames.bukkit.towny.object.Resident;
@@ -14,7 +13,6 @@ import com.palmergames.bukkit.util.BukkitTools;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.permissions.Permissible;
@@ -176,7 +174,24 @@ public class BaseCommand implements TabCompleter{
 		
 		return Collections.emptyList();
 	}
-	
+
+	/**
+	 * Returns the names a player's nation's residents that start with a string
+	 *
+	 * @param player the player to get the nation's residents of
+	 * @param str the string to check if the nation's residents start with
+	 * @return the resident names that match str
+	 */
+	public static List<String> getNationResidentNamesOfPlayerStartingWith(Player player, String str){
+		Resident res = TownyUniverse.getInstance().getResident(player.getUniqueId());
+		
+		if (res != null && res.hasNation()) {
+			return NameUtil.filterByStart(NameUtil.getNames(res.getNationOrNull().getResidents()), str);
+		}
+
+		return Collections.emptyList();
+	}
+
 	/**
 	 * Returns the names a player's town's residents that start with a string
 	 *
@@ -191,7 +206,7 @@ public class BaseCommand implements TabCompleter{
 			return NameUtil.filterByStart(NameUtil.getNames(res.getTownOrNull().getResidents()), str);
 		}
 
-		return Collections.emptyList();
+		return new ArrayList<>();
 	}
 
 	/**
@@ -235,8 +250,9 @@ public class BaseCommand implements TabCompleter{
 		if (!(sender instanceof Player player))
 			return getResidentsWithoutTownStartingWith(arg);
 		List<String> residents = getOnlinePlayersWithoutTown().stream()
-			.filter(res -> player.canSee(res.getPlayer()))
-			.map(res -> res.getName())
+			.map(Resident::getPlayer)
+			.filter(p -> p != null && player.canSee(p))
+			.map(Player::getName)
 			.collect(Collectors.toCollection(ArrayList::new));
 		return !residents.isEmpty()
 			? NameUtil.filterByStart(residents, arg)
@@ -256,22 +272,22 @@ public class BaseCommand implements TabCompleter{
 
 	@NotNull
 	protected static Town getTownFromPlayerOrThrow(Player player) throws TownyException {
-		return getTownFromResidentOrThrow(getResidentOrThrow(player.getUniqueId()));
+		return getTownFromResidentOrThrow(getResidentOrThrow(player));
 	}
 
 	@NotNull
 	protected static Town getTownFromResidentOrThrow(@NotNull Resident resident) throws TownyException {
 		if (!resident.hasTown())
-			throw new TownyException(Translatable.of("msg_err_dont_belong_town"));
+			throw new TownyException(Translatable.of("msg_err_townyobject_x_has_no_town", resident));
 		return resident.getTownOrNull();
 	}
 
 	@NotNull
-	protected static Resident getResidentOrThrow(UUID playerUUID) throws NotRegisteredException {
+	protected static Resident getResidentOrThrow(UUID playerUUID) throws TownyException {
 		Resident res = TownyUniverse.getInstance().getResident(playerUUID);
 
 		if (res == null) {
-			throw new NotRegisteredException(Translatable.of("msg_err_not_registered"));
+			throw new TownyException(Translatable.of("msg_err_not_registered"));
 		}
 
 		return res;
@@ -279,57 +295,67 @@ public class BaseCommand implements TabCompleter{
 	
 	@NotNull
 	@Contract("null -> fail")
-	protected static Resident getResidentOrThrow(@Nullable Player player) throws NotRegisteredException {
+	protected static Resident getResidentOrThrow(@Nullable Player player) throws TownyException {
 		Resident resident = player == null ? null : TownyAPI.getInstance().getResident(player);
 		
 		if (resident == null)
-			throw new NotRegisteredException(Translatable.of("msg_err_not_registered"));
+			throw new TownyException(Translatable.of("msg_err_resident_unknown", player.getName()));
 		
 		return resident;
 	}
 
 	@NotNull
-	protected static Resident getResidentOrThrow(String residentName) throws NotRegisteredException {
+	protected static Resident getResidentOrThrow(String residentName) throws TownyException {
 		Resident res = TownyUniverse.getInstance().getResident(residentName);
 
 		if (res == null) {
-			throw new NotRegisteredException(Translatable.of("msg_err_not_registered_1", residentName));
+			throw new TownyException(Translatable.of("msg_err_resident_unknown", residentName));
 		}
 
 		return res;
 	}
 	
 	@NotNull
-	protected static Town getTownOrThrow(String townName) throws NotRegisteredException {
+	protected static Town getTownOrThrow(String townName) throws TownyException {
 		Town town = TownyUniverse.getInstance().getTown(townName);
 
 		if (town == null) {
-			throw new NotRegisteredException(Translatable.of("msg_err_not_registered_1", townName));
+			throw new TownyException(Translatable.of("msg_err_town_unknown", townName));
 		}
 
 		return town;
 	}
 	
 	@NotNull
-	protected static Nation getNationOrThrow(String nationName) throws NotRegisteredException {
+	protected static Nation getNationOrThrow(String nationName) throws TownyException {
 		Nation nation = TownyUniverse.getInstance().getNation(nationName);
 
 		if (nation == null)
-			throw new NotRegisteredException(Translatable.of("msg_err_not_registered_1", nationName));
+			throw new TownyException(Translatable.of("msg_err_nation_unknown", nationName));
 
 		return nation;
 	}
 
 	@NotNull
 	protected static Nation getNationFromPlayerOrThrow(Player player) throws TownyException {
-		return getNationFromResidentOrThrow(getResidentOrThrow(player.getUniqueId()));
+		return getNationFromResidentOrThrow(getResidentOrThrow(player));
 	}
 
 	@NotNull
 	protected static Nation getNationFromResidentOrThrow(Resident resident) throws TownyException {
 		if (!resident.hasNation())
-			throw new TownyException(Translatable.of("msg_err_dont_belong_nation"));
+			throw new TownyException(Translatable.of("msg_err_townyobject_x_has_no_nation", resident));
 		return resident.getNationOrNull();
+	}
+
+	@NotNull
+	protected static Nation getNationFromTownOrThrow(Town town) throws TownyException {
+		Nation nation = town.getNationOrNull();
+
+		if (nation == null)
+			throw new TownyException(Translatable.of("msg_err_townyobject_x_has_no_nation", town));
+
+		return nation;
 	}
 
 	private static List<Resident> getOnlinePlayersWithoutTown() {
@@ -348,12 +374,18 @@ public class BaseCommand implements TabCompleter{
 			throw new TownyException(Translatable.of("msg_err_console_only"));
 	}
 	
-	public static void catchConsole(CommandSender sender) throws TownyException {
-		if (sender instanceof ConsoleCommandSender)
+	public static Player catchConsole(CommandSender sender) throws TownyException {
+		if (!(sender instanceof Player player))
 			throw new TownyException(Translatable.of("msg_err_player_only"));
+		
+		return player;
 	}
 	
 	public static void checkPermOrThrow(Permissible permissible, String node) throws NoPermissionException {
 		TownyUniverse.getInstance().getPermissionSource().testPermissionOrThrow(permissible, node);
+	}
+	
+	public static void checkPermOrThrowWithMessage(Permissible permissible, String node, Translatable errormsg) throws NoPermissionException {
+		TownyUniverse.getInstance().getPermissionSource().testPermissionOrThrow(permissible, node, errormsg);
 	}
 }

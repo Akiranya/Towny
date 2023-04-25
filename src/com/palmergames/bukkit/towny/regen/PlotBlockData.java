@@ -7,21 +7,33 @@ import com.palmergames.bukkit.towny.object.WorldCoord;
 import com.palmergames.bukkit.towny.regen.block.BlockObject;
 import com.palmergames.bukkit.util.BukkitTools;
 
+import org.bukkit.ChunkSnapshot;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
+import org.jetbrains.annotations.NotNull;
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class PlotBlockData {
 
-	private int defaultVersion = 4;
+	/* 
+	 * Version number changes when something requires the PlotBlockData to be altered.
+	 * ----------
+	 * version 5: Required to accomodate worlds with y lower than 0, MC 1.19.
+	 * version 4: Required to accept BlockData an support MC 1.14 and newer.
+	 * version 3: Required when blocks were no longer available as type:data ints.
+	 * version 1 & 2: Older than time itself.
+	 */
+	private final int defaultVersion = 5;
 
-	private String worldName;
-	private TownBlock townBlock;
-	private int x, z, size, height, version;
+	private final String worldName;
+	private final TownBlock townBlock;
+	private int x, z, size, height, minHeight, version;
 
-	private List<String> blockList = new ArrayList<>(); // Stores the original plot blocks
+	private final List<String> blockList = new ArrayList<>(); // Stores the original plot blocks
 	private int blockListRestored; // counter for the next block to test
 
 	public PlotBlockData(TownBlock townBlock) {
@@ -33,13 +45,14 @@ public class PlotBlockData {
 		this.worldName = townBlock.getWorld().getName();
 		this.setVersion(defaultVersion);
 		setHeight(townBlock.getWorldCoord().getBukkitWorld().getMaxHeight() - 1);
+		setMinHeight(townBlock.getWorldCoord().getBukkitWorld().getMinHeight());
 		this.blockListRestored = 0;
 	}
 
-	public void initialize() {
+	public void initialize(List<ChunkSnapshot> snapshots) {
 
-		List<String> blocks = getBlockArr();
-		if (blocks != null) {
+		List<String> blocks = getBlockArr(snapshots);
+		if (!blocks.isEmpty()) {
 			setBlockList(blocks); //fill array
 			resetBlockListRestored();
 		}
@@ -48,38 +61,49 @@ public class PlotBlockData {
 	/**
 	 * Fills an array with the current Block types from the plot.
 	 * 
-	 * @return
+	 * @return A list containing the block data for each blocks in this plot.
 	 */
-	private List<String> getBlockArr() {
+	private List<String> getBlockArr(List<ChunkSnapshot> snapshots) {
+		final List<String> blocks = new ArrayList<>();
 
-		List<String> list = new ArrayList<>();
-		Block block = null;
+		// If the town block size is 16 we can just use this
+		final ChunkSnapshot single = snapshots.size() == 1 && this.size == 16 ? snapshots.get(0) : null;
 
-		World world = this.townBlock.getWorldCoord().getBukkitWorld();
-		/*
-		 * if (!world.isChunkLoaded(MinecraftTools.calcChunk(getX()),
-		 * MinecraftTools.calcChunk(getZ()))) {
-		 * return null;
-		 * }
-		 */
+		final World world = this.townBlock.getWorldCoord().getBukkitWorld();
+		if (world == null)
+			return blocks;
+		
 		for (int z = 0; z < size; z++)
 			for (int x = 0; x < size; x++)
-				for (int y = height; y > 0; y--) { // Top down to account for falling blocks.
-					block = world.getBlockAt((getX() * size) + x, y, (getZ() * size) + z);
-					switch (defaultVersion) {
-
-					case 1:
-					case 2:
-					case 3:
-					case 4:
-						list.add(block.getBlockData().getAsString(true));
-						break;
-					default:
-						list.add(block.getType().getKey().toString());
-
-					}					
+				for (int y = height; y > minHeight; y--) { // Top down to account for falling blocks.
+					if (single != null) {
+						// Our xyz will match the chunk's xyz
+						blocks.add(single.getBlockData(x, y, z).getAsString(true));
+						continue;
+					}
+					
+					blocks.add(lookupData(snapshots, x, y, z).getAsString(true));
 				}
-		return list;
+		
+		return blocks;
+	}
+	
+	private BlockData lookupData(List<ChunkSnapshot> snapshots, int x, int y, int z) {
+		final int worldX = getX() * size + x;
+		final int worldZ = getZ() * size + z;
+		
+		final int chunkX = worldX >> 4;
+		final int chunkZ = worldZ >> 4;
+		
+		for (ChunkSnapshot snapshot : snapshots) {
+			if (snapshot.getX() != chunkX || snapshot.getZ() != chunkZ)
+				continue;
+			
+			return snapshot.getBlockData(worldX & 0xF, y, worldZ & 0xF);
+		}
+		
+		// This should not happen, this would mean the supplied chunk snapshot is outside our world coord.
+		return Material.AIR.createBlockData();
 	}
 
 	/**
@@ -89,85 +113,61 @@ public class PlotBlockData {
 	 */
 	public boolean restoreNextBlock() {
 
-		Block block = null;
-		int x, y, z, reverse, scale;
+		int x, y, z, reverse;
 		int worldx = getX() * size, worldz = getZ() * size;
-		Material blockMat, mat;
-		BlockObject storedData;
+		int yRange = Math.abs(minHeight) + height;
 		World world = this.townBlock.getWorldCoord().getBukkitWorld();
 
-		if (!world.isChunkLoaded(BukkitTools.calcChunk(getX()), BukkitTools.calcChunk(getZ())))
+		if (world == null || !world.isChunkLoaded(BukkitTools.calcChunk(getX()), BukkitTools.calcChunk(getZ())))
 			return true;
 
-
-		//Scale for the number of elements
-		switch (version) {
-
-			case 1:
-			case 2:
-			case 3:
-				scale = 2;
-				break;	
-			case 4:
-				scale = 1;
-				break;	
-			default:
-				scale = 1;
+		// Catch old snapshots which will not regenerate correctly.
+		if (this.version < 4) {
+			TownyMessaging.sendErrorMsg("Towny found a plotsnapshot which is from a version too old to use!");
+			return false;
 		}
 
-		reverse = (blockList.size() - blockListRestored) / scale;
-		
+		reverse = (blockList.size() - blockListRestored);
+
 		while (reverse > 0) {
 			reverse--; //regen bottom up to stand a better chance of restoring tree's and plants.
-			y = height - (reverse % height);
-			x = (reverse / height) % size;
-			z = (reverse / height / size) % size;
+			blockListRestored++;
+			y = height - (reverse % yRange);
+			x = (reverse / yRange) % size;
+			z = (reverse / yRange / size) % size;
 	
-			block = world.getBlockAt(worldx + x, y, worldz + z);
-			blockMat = block.getType();
+			final Block block = world.getBlockAt(worldx + x, y, worldz + z);
+			final Material blockMat = block.getType();
+			final BlockObject storedData;
 			try {
-				storedData = getStoredBlockData((blockList.size() - 1) - blockListRestored);
+				storedData = getStoredBlockData(blockList.size() - blockListRestored);
 			} catch (IllegalArgumentException e1) {
 				TownyMessaging.sendDebugMsg("Towny's revert-on-unclaim feature encountered a block which will not load on the current version of MC. Ignoring and skipping to next block.");
 				continue;
 			}
-			
-			switch (version) {
-		
-				case 1:
-				case 2:				
-				case 3:
-				case 4:
-					blockListRestored += scale;
-					
-					mat = storedData.getMaterial();
-					if (mat == null) {
-						TownyMessaging.sendErrorMsg("PlotBlockData:restoreNextBlock() - Material Null, skipping block.");
-					} else if (blockMat != mat) {
-						if (!this.townBlock.getWorld().isPlotManagementIgnoreIds(mat)) {
-							try {								
-								block.setType(mat, false);
-								block.setBlockData(storedData.getBlockData());
-								return true;
-							} catch (Exception e) {
-								TownyMessaging.sendErrorMsg("Exception in PlotBlockData.java");
-								break;
-							}
-			
-						} else {					
-							block.setType(Material.AIR);
-							return true;
-						}
-			
-					}
-					//TownyMessaging.sendDebugMsg("PlotBlockData:restoreNextBlock() - Blocks match, no replacing needed.");
-					break;
-					
-				default:
-					TownyMessaging.sendErrorMsg("PlotBlockData:restoreNextBlock() - You should not be seeing this message.");					
-					
+
+			final Material mat = storedData.getMaterial();
+
+			// Catch mat being null or currently existing block being the same.
+			if (mat == null || blockMat == mat) {
+				continue;
 			}
-			
+
+			// Catch this being a ignored material that isn't allowed to be reverted, setting it to air.
+			if (this.townBlock.getWorld().isPlotManagementIgnoreIds(mat)) {
+				block.setType(Material.AIR);
+				return true;
+			}
+
+			// Actually set the block back to what we have in the snapshot.
+			try {
+				block.setType(mat, false);
+				block.setBlockData(storedData.getBlockData());
+				return true;
+			} catch (Exception e) {
+				TownyMessaging.sendErrorMsg("Exception in PlotBlockData.java");
+				break;
+			}
 		}
 		// reset as we are finished with the regeneration
 		resetBlockListRestored();
@@ -175,19 +175,7 @@ public class PlotBlockData {
 	}
 
 	private BlockObject getStoredBlockData(int index) {
-
-		//return based upon version
-		switch (version) {
-
-		case 1:
-		case 2:
-		case 3:
-		case 4:
-			return new BlockObject(blockList.get(index));
-		default:
-			return new BlockObject(blockList.get(index));
-		}
-
+		return new BlockObject(blockList.get(index));
 	}
 
 	public int getX() {
@@ -230,6 +218,15 @@ public class PlotBlockData {
 		this.height = height;
 	}
 
+	public int getMinHeight() {
+
+		return minHeight;
+	}
+
+	public void setMinHeight(int minHeight) {
+		this.minHeight = minHeight;
+	}
+
 	public String getWorldName() {
 
 		return worldName;
@@ -262,11 +259,11 @@ public class PlotBlockData {
 	/**
 	 * fills the BlockList
 	 * 
-	 * @param blockList - BlockList (List&lt;String&gt;)
+	 * @param blockList BlockList (List&lt;String&gt;)
 	 */
-	public void setBlockList(List<String> blockList) {
-
-		this.blockList = blockList;
+	public void setBlockList(final @NotNull List<String> blockList) {
+		this.blockList.clear();
+		this.blockList.addAll(blockList);
 	}
 
 	/**
@@ -279,7 +276,7 @@ public class PlotBlockData {
 	}
 
 	public WorldCoord getWorldCoord() {
-		return new WorldCoord(getWorldName(), getX(), getZ());
+		return townBlock.getWorldCoord();
 	}
 
 }
